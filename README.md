@@ -6,7 +6,7 @@ A native desktop application for managing local PHP/Node.js development environm
 
 - **Backend:** Tauri 2.0 (Rust)
 - **Frontend:** Vue 3 + TypeScript
-- **Styling:** Custom CSS (dark theme, amber accent)
+- **Styling:** Tailwind CSS 4 (dark theme, amber accent)
 - **State:** Pinia
 - **Routing:** Vue Router
 
@@ -17,7 +17,7 @@ A native desktop application for managing local PHP/Node.js development environm
 ### Core Infrastructure
 - [x] Tauri 2.0 + Vue 3 + TypeScript setup
 - [x] Dark theme with amber accent (#f59e0b)
-- [x] Custom titlebar with window controls
+- [x] Custom frameless window
 - [x] Sidebar navigation
 - [x] Page header component
 - [x] Responsive layout
@@ -39,7 +39,7 @@ A native desktop application for managing local PHP/Node.js development environm
 - [x] Download and install Node.js versions
 - [x] Uninstall Node.js versions
 - [x] Update detection
-- [x] Package managers (npm, yarn, pnpm, bun) - detect, install, update, uninstall
+- [x] Package managers detection (npm, yarn, pnpm, bun)
 - [ ] Grouped version display (like PHP)
 - [ ] Add Node to Windows PATH
 
@@ -89,8 +89,7 @@ harvest/
 │   │   ├── PageHeader.vue        # Page title + subtitle
 │   │   ├── Sidebar.vue           # Navigation sidebar
 │   │   ├── ServiceCard.vue       # Service status card
-│   │   ├── SiteCard.vue          # Site display card
-│   │   └── PhpSelector.vue       # (deprecated)
+│   │   └── SiteCard.vue          # Site display card
 │   ├── views/
 │   │   ├── Dashboard.vue         # Overview page
 │   │   ├── Sites.vue             # Site management
@@ -112,7 +111,16 @@ harvest/
 ├── src-tauri/
 │   ├── src/
 │   │   ├── main.rs               # Tauri entry point
-│   │   └── lib.rs                # All Tauri commands
+│   │   ├── lib.rs                # App init, command registration
+│   │   ├── types/
+│   │   │   └── mod.rs            # Shared data structures
+│   │   └── commands/
+│   │       ├── mod.rs            # Module exports
+│   │       ├── config.rs         # App configuration
+│   │       ├── sites.rs          # Site scanning & actions
+│   │       ├── php.rs            # PHP version management
+│   │       ├── node.rs           # Node.js & package managers
+│   │       └── services.rs       # Service management (Phase 2)
 │   ├── Cargo.toml
 │   └── tauri.conf.json
 ├── index.html
@@ -125,36 +133,37 @@ harvest/
 
 ## Implemented Tauri Commands
 
+### Config (`commands/config.rs`)
 ```rust
-// Configuration
 get_config() -> AppConfig
 save_config(config: AppConfig) -> Result<(), String>
+```
 
-// Sites
+### Sites (`commands/sites.rs`)
+```rust
 scan_sites(directories: Vec<String>) -> Result<Vec<Site>, String>
 open_in_editor(path: String, editor: String) -> Result<(), String>
 open_in_terminal(path: String, terminal: String) -> Result<(), String>
 open_in_browser(url: String) -> Result<(), String>
+```
 
-// PHP
+### PHP (`commands/php.rs`)
+```rust
 get_available_php_versions() -> Result<Vec<AvailableVersion>, String>
 get_installed_php_versions() -> Vec<InstalledVersion>
-install_php_version(version: String) -> Result<(), String>
+install_php_version(app: AppHandle, version: String) -> Result<(), String>
 uninstall_php_version(version: String) -> Result<(), String>
 get_php_extensions(php_path: String) -> Result<Vec<PhpExtension>, String>
 toggle_php_extension(php_path: String, extension: String, enable: bool) -> Result<(), String>
+```
 
-// Node.js
+### Node.js (`commands/node.rs`)
+```rust
 get_available_node_versions() -> Result<Vec<AvailableVersion>, String>
 get_installed_node_versions() -> Vec<InstalledVersion>
-install_node_version(version: String) -> Result<(), String>
+install_node_version(app: AppHandle, version: String) -> Result<(), String>
 uninstall_node_version(version: String) -> Result<(), String>
-
-// Package Managers
 get_package_managers() -> Vec<PackageManager>
-install_package_manager(name: String) -> Result<(), String>
-uninstall_package_manager(name: String) -> Result<(), String>
-update_package_manager(name: String) -> Result<(), String>
 ```
 
 ---
@@ -196,9 +205,10 @@ bun run tauri build
 
 ## Roadmap
 
-### Phase 1 (Current) - Version Management
+### Phase 1 (Complete) - Version Management
 - [x] PHP version management
 - [x] Node.js version management
+- [x] Package managers detection
 - [x] Basic site scanning
 
 ### Phase 2 - Service Management

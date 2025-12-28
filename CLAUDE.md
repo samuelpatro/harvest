@@ -29,18 +29,29 @@ bun run dev
 
 ### Frontend (Vue 3 + TypeScript)
 - **Entry**: `src/main.ts` → `src/App.vue`
-- **Routing**: `src/router.ts` - Vue Router with 4 views (Dashboard, Sites, Services, Settings)
+- **Routing**: `src/router.ts` - Vue Router with views (Dashboard, Sites, Php, Node, Services, Settings)
 - **State**: Pinia stores in `src/stores/` - `sites.ts`, `services.ts`, `config.ts`
 - **Types**: `src/types/index.ts` - TypeScript interfaces (Site, StackItem, ServiceInfo, etc.)
 - **Styling**: Tailwind CSS 4 with CSS variables in `src/styles/main.css`
 
 ### Backend (Rust/Tauri)
-- **Entry**: `src-tauri/src/main.rs` → `src-tauri/src/lib.rs`
-- **Config**: Settings persisted to `%APPDATA%/harvest/config.json` (Windows)
-- **Tauri Commands**:
-  - `get_config` / `save_config` - App configuration
-  - `scan_sites` - Scans directory for PHP projects, detects framework & stack
-  - `open_in_browser` / `open_in_editor` / `open_in_terminal` - Site actions
+```
+src-tauri/
+├── src/
+│   ├── main.rs              # Tauri entry point
+│   ├── lib.rs               # App initialization, command registration
+│   ├── types/
+│   │   └── mod.rs           # Shared data structures
+│   └── commands/
+│       ├── mod.rs           # Module exports
+│       ├── config.rs        # App configuration (get/save config)
+│       ├── sites.rs         # Site scanning, detection, open actions
+│       ├── php.rs           # PHP version management, extensions
+│       ├── node.rs          # Node.js versions, package managers
+│       └── services.rs      # Service management (Phase 2)
+├── Cargo.toml
+└── tauri.conf.json
+```
 
 ### Key Tauri Plugins
 - `tauri-plugin-dialog` - Native folder picker
@@ -49,14 +60,41 @@ bun run dev
 
 ## Design System
 
-- **Background**: `#0d0d0f` (primary), `#18181b` (elevated), `#1c1c1f` (card)
+- **Background**: `#0a0a0b` (primary), `#111113` (elevated), `#161618` (card)
 - **Accent**: `#f59e0b` (amber)
-- **Fonts**: Outfit (UI), JetBrains Mono (code)
-- **Frameless window** with custom titlebar in `src/components/Titlebar.vue`
+- **Fonts**: System UI, JetBrains Mono (code)
+- **Frameless window** with custom titlebar
+
+## Tauri Commands
+
+### Config Commands (`commands/config.rs`)
+- `get_config()` → `AppConfig`
+- `save_config(config)` → `Result<(), String>`
+
+### Site Commands (`commands/sites.rs`)
+- `scan_sites(directories)` → `Result<Vec<Site>, String>`
+- `open_in_editor(path, editor)` → `Result<(), String>`
+- `open_in_terminal(path, terminal)` → `Result<(), String>`
+- `open_in_browser(url)` → `Result<(), String>`
+
+### PHP Commands (`commands/php.rs`)
+- `get_available_php_versions()` → `Result<Vec<AvailableVersion>, String>`
+- `get_installed_php_versions()` → `Vec<InstalledVersion>`
+- `install_php_version(app, version)` → `Result<(), String>`
+- `uninstall_php_version(version)` → `Result<(), String>`
+- `get_php_extensions(php_path)` → `Result<Vec<PhpExtension>, String>`
+- `toggle_php_extension(php_path, extension, enable)` → `Result<(), String>`
+
+### Node Commands (`commands/node.rs`)
+- `get_available_node_versions()` → `Result<Vec<AvailableVersion>, String>`
+- `get_installed_node_versions()` → `Vec<InstalledVersion>`
+- `install_node_version(app, version)` → `Result<(), String>`
+- `uninstall_node_version(version)` → `Result<(), String>`
+- `get_package_managers()` → `Vec<PackageManager>`
 
 ## Site Detection
 
-The Rust backend (`detect_stack` function) scans project directories and detects:
+The Rust backend (`commands/sites.rs`) scans project directories and detects:
 - **PHP frameworks**: OctoberCMS, Laravel, plain PHP (via `composer.json`, `artisan`, module directories)
 - **Frontend stack**: Vue, React, Vite, Tailwind, TypeScript (via `package.json`)
 - **Package managers**: Bun, pnpm, Yarn (via lockfiles)
@@ -67,7 +105,19 @@ The Rust backend (`detect_stack` function) scans project directories and detects
 Vue components call Rust via `invoke` from `@tauri-apps/api/core`:
 ```typescript
 import { invoke } from '@tauri-apps/api/core'
-const sites = await invoke<Site[]>('scan_sites', { directory: '/path' })
+const sites = await invoke<Site[]>('scan_sites', { directories: ['/path'] })
 ```
 
-Rust returns snake_case fields; map to camelCase in TypeScript stores.
+Rust returns snake_case fields; the frontend handles mapping as needed.
+
+## Data Types (`types/mod.rs`)
+
+```rust
+pub struct AppConfig { harvest_paths, editor_command, terminal_command }
+pub struct Site { id, name, path, domain, php_version, stack, ssl }
+pub struct StackItem { name, version }
+pub struct InstalledVersion { version, path }
+pub struct AvailableVersion { version, full_version, lts, download_url }
+pub struct PhpExtension { name, enabled, builtin }
+pub struct PackageManager { name, command, installed, version, description }
+```
