@@ -15,6 +15,7 @@ use commands::{
         get_package_managers,
     },
     services::{get_services, start_service, stop_service, restart_service},
+    vhosts::{get_vhost_status, get_all_vhost_statuses, link_site, unlink_site, check_nginx_config},
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -50,6 +51,12 @@ pub fn run() {
             start_service,
             stop_service,
             restart_service,
+            // Vhosts
+            get_vhost_status,
+            get_all_vhost_statuses,
+            link_site,
+            unlink_site,
+            check_nginx_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

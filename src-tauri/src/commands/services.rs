@@ -27,6 +27,9 @@ pub struct ServiceConfig {
     pub version_arg: Option<String>, // argument to get version, e.g. "-v" or "--version"
 }
 
+// Harvest home directory - all services live here
+const HARVEST_HOME: &str = "C:/harvest";
+
 fn get_service_configs() -> Vec<ServiceConfig> {
     vec![
         ServiceConfig {
@@ -35,10 +38,12 @@ fn get_service_configs() -> Vec<ServiceConfig> {
             port: 80,
             exe_name: "nginx.exe".to_string(),
             possible_paths: vec![
-                "C:/laragon/bin/nginx".to_string(),
-                "C:/nginx".to_string(),
+                format!("{}/bin/nginx", HARVEST_HOME),
             ],
-            start_args: vec![],
+            start_args: vec![
+                "-c".to_string(),
+                format!("{}/etc/nginx/nginx.conf", HARVEST_HOME),
+            ],
             stop_method: "signal".to_string(),
             description: "High-performance HTTP server and reverse proxy".to_string(),
             version_arg: Some("-v".to_string()),
@@ -49,8 +54,7 @@ fn get_service_configs() -> Vec<ServiceConfig> {
             port: 3306,
             exe_name: "mysqld.exe".to_string(),
             possible_paths: vec![
-                "C:/laragon/bin/mysql".to_string(),
-                "C:/Program Files/MySQL/MySQL Server 8.0/bin".to_string(),
+                format!("{}/bin/mysql", HARVEST_HOME),
             ],
             start_args: vec![],
             stop_method: "service".to_string(),
@@ -63,26 +67,11 @@ fn get_service_configs() -> Vec<ServiceConfig> {
             port: 6379,
             exe_name: "redis-server.exe".to_string(),
             possible_paths: vec![
-                "C:/laragon/bin/redis".to_string(),
-                "C:/Program Files/Redis".to_string(),
+                format!("{}/bin/redis", HARVEST_HOME),
             ],
             start_args: vec![],
             stop_method: "taskkill".to_string(),
             description: "In-memory data store and cache".to_string(),
-            version_arg: Some("--version".to_string()),
-        },
-        ServiceConfig {
-            id: "postgresql".to_string(),
-            name: "PostgreSQL".to_string(),
-            port: 5432,
-            exe_name: "postgres.exe".to_string(),
-            possible_paths: vec![
-                "C:/laragon/bin/postgresql".to_string(),
-                "C:/Program Files/PostgreSQL/16/bin".to_string(),
-            ],
-            start_args: vec![],
-            stop_method: "service".to_string(),
-            description: "Advanced open-source relational database".to_string(),
             version_arg: Some("--version".to_string()),
         },
     ]
@@ -332,16 +321,20 @@ pub async fn stop_service(id: String) -> Result<(), String> {
 
     match config.stop_method.as_str() {
         "signal" => {
-            // For nginx, use nginx -s stop
+            // For nginx, use nginx -s stop with config path
             if let Some(exe_path) = find_executable(config) {
-                let working_dir = exe_path.parent()
-                    .ok_or_else(|| "Could not determine working directory".to_string())?;
-
-                Command::new(&exe_path)
-                    .current_dir(working_dir)
-                    .args(["-s", "stop"])
+                let output = Command::new(&exe_path)
+                    .args(["-c", &format!("{}/etc/nginx/nginx.conf", HARVEST_HOME), "-s", "stop"])
                     .output()
                     .map_err(|e| format!("Failed to stop {}: {}", config.name, e))?;
+
+                // If graceful stop fails, force kill
+                if !output.status.success() {
+                    Command::new("taskkill")
+                        .args(["/F", "/IM", &config.exe_name])
+                        .output()
+                        .map_err(|e| format!("Failed to force stop {}: {}", config.name, e))?;
+                }
             }
         },
         "service" => {

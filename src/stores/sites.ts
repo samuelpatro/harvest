@@ -9,13 +9,23 @@ interface AppConfig {
   default_php: string
 }
 
+interface VhostStatus {
+  site_name: string
+  domain: string
+  nginx_config_exists: boolean
+  hosts_entry_exists: boolean
+  is_linked: boolean
+}
+
 export const useSitesStore = defineStore('sites', {
   state: () => ({
     sites: [] as Site[],
+    vhostStatuses: {} as Record<string, VhostStatus>,
     loading: false,
     searchQuery: '',
     config: null as AppConfig | null,
     error: null as string | null,
+    linkingInProgress: {} as Record<string, boolean>,
   }),
 
   getters: {
@@ -107,6 +117,56 @@ export const useSitesStore = defineStore('sites', {
 
     setSearchQuery(query: string) {
       this.searchQuery = query
+    },
+
+    async fetchVhostStatuses() {
+      if (this.sites.length === 0) return
+
+      try {
+        const siteNames = this.sites.map(s => s.name)
+        const statuses = await invoke<VhostStatus[]>('get_all_vhost_statuses', { siteNames })
+
+        this.vhostStatuses = {}
+        for (const status of statuses) {
+          this.vhostStatuses[status.site_name] = status
+        }
+      } catch (error) {
+        console.error('Failed to fetch vhost statuses:', error)
+      }
+    },
+
+    async linkSite(site: Site) {
+      this.linkingInProgress[site.name] = true
+      try {
+        await invoke<string>('link_site', { siteName: site.name, rootPath: site.path })
+        await this.fetchVhostStatuses()
+      } catch (error) {
+        console.error('Failed to link site:', error)
+        throw error
+      } finally {
+        this.linkingInProgress[site.name] = false
+      }
+    },
+
+    async unlinkSite(site: Site) {
+      this.linkingInProgress[site.name] = true
+      try {
+        await invoke<string>('unlink_site', { siteName: site.name })
+        await this.fetchVhostStatuses()
+      } catch (error) {
+        console.error('Failed to unlink site:', error)
+        throw error
+      } finally {
+        this.linkingInProgress[site.name] = false
+      }
+    },
+
+    isLinked(siteName: string): boolean {
+      return this.vhostStatuses[siteName]?.is_linked ?? false
+    },
+
+    isLinking(siteName: string): boolean {
+      return this.linkingInProgress[siteName] ?? false
     }
   },
 })

@@ -121,3 +121,34 @@ pub struct AvailableVersion { version, full_version, lts, download_url }
 pub struct PhpExtension { name, enabled, builtin }
 pub struct PackageManager { name, command, installed, version, description }
 ```
+
+## Roadmap
+
+### Phase 3: Standalone Mode (TODO)
+- **Configurable Harvest Home**: Let user choose install location (e.g., `D:\Harvest`, `C:\Dev\Harvest`)
+  - First-run setup wizard to pick location
+  - Small config in AppData points to real Harvest folder
+  - Fully portable - can move the whole folder
+- **Independent binaries**: Download nginx, PHP, MySQL, Redis to `{harvest_home}/bin/`
+- **Own config files**: Store nginx vhosts, SSL certs in `{harvest_home}/etc/`
+- **No Laragon dependency**: Completely standalone operation
+
+### Phase 3: Vhost Management (TODO)
+- **Nginx vhost generation**: Auto-create `.test` domain configs
+- **Hosts file management**: Add/remove `127.0.0.1 site.test` entries
+- **SSL certificates**: Generate self-signed certs with local CA
+- **Site linking**: `link_site()` / `unlink_site()` commands
+
+### Phase 4: Dashboard Improvements (TODO)
+- **Quick stats**: Sites count, services status, PHP/Node versions
+- **Services overview**: Compact status cards with toggle
+- **Recent sites**: Quick access with actions
+- **System health**: At-a-glance environment status
+
+### Future Ideas
+- Per-site PHP version switching
+- Database management (create/drop databases)
+- Log viewer for nginx/PHP/MySQL
+- Site templates (Laravel, October, etc.)
+- Backup/restore sites
+- Share sites via tunneling (like Expose/ngrok)

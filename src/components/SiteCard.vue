@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import type { Site } from '../types'
 
-defineProps<{
+const props = defineProps<{
   site: Site
+  isLinked: boolean
+  isLinking: boolean
 }>()
 
 const emit = defineEmits<{
   open: [site: Site]
   editor: [site: Site]
   terminal: [site: Site]
+  link: [site: Site]
+  unlink: [site: Site]
 }>()
 
 const stackColors: Record<string, string> = {
@@ -96,6 +100,25 @@ function isPhpProject(stack: { name: string; version: string | null }[]) {
         <span v-if="isPhpProject(site.stack)" class="php-badge">PHP {{ site.phpVersion }}</span>
       </div>
       <div class="site-actions">
+        <!-- Link/Unlink button -->
+        <button
+          class="action-btn link-btn"
+          :class="{ linked: isLinked, linking: isLinking }"
+          :title="isLinked ? 'Unlink site (remove .test domain)' : 'Link site (create .test domain)'"
+          :disabled="isLinking"
+          @click="isLinked ? emit('unlink', site) : emit('link', site)"
+        >
+          <div v-if="isLinking" class="btn-spinner" />
+          <svg v-else-if="isLinked" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            <line x1="2" y1="2" x2="22" y2="22" />
+          </svg>
+        </button>
         <button class="action-btn" title="Open in Browser" @click="emit('open', site)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -261,5 +284,30 @@ function isPhpProject(stack: { name: string; version: string | null }[]) {
 .action-btn svg {
   width: 16px;
   height: 16px;
+}
+
+.link-btn.linked {
+  color: var(--color-accent);
+}
+
+.link-btn.linked:hover {
+  color: #ef4444;
+}
+
+.link-btn:not(.linked):hover {
+  color: #22c55e;
+}
+
+.btn-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

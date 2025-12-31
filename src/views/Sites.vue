@@ -6,8 +6,9 @@ import SiteCard from '../components/SiteCard.vue'
 
 const store = useSitesStore()
 
-onMounted(() => {
-  store.fetchSites()
+onMounted(async () => {
+  await store.fetchSites()
+  await store.fetchVhostStatuses()
 })
 </script>
 
@@ -57,9 +58,13 @@ onMounted(() => {
           v-for="site in store.filteredSites"
           :key="site.id"
           :site="site"
+          :is-linked="store.isLinked(site.name)"
+          :is-linking="store.isLinking(site.name)"
           @open="store.openInBrowser"
           @editor="store.openInEditor"
           @terminal="store.openInTerminal"
+          @link="store.linkSite"
+          @unlink="store.unlinkSite"
         />
       </div>
     </div>
