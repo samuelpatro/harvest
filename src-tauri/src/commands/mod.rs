@@ -9,3 +9,4 @@ pub use config::*;
 pub use sites::*;
 pub use php::*;
 pub use node::*;
+pub use services::*;

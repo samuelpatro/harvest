@@ -14,6 +14,7 @@ use commands::{
         install_node_version, uninstall_node_version,
         get_package_managers,
     },
+    services::{get_services, start_service, stop_service, restart_service},
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -44,6 +45,11 @@ pub fn run() {
             install_node_version,
             uninstall_node_version,
             get_package_managers,
+            // Services
+            get_services,
+            start_service,
+            stop_service,
+            restart_service,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
