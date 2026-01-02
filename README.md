@@ -49,18 +49,20 @@ A native desktop application for managing local PHP/Node.js development environm
 - [x] Open site in browser
 - [x] Open site in editor (VS Code, Cursor, PhpStorm)
 - [x] Open site in terminal
-- [ ] Auto-detect OctoberCMS, Laravel, vanilla PHP
-- [ ] Create `.test` domain routing (hosts file)
+- [x] Auto-detect OctoberCMS, Laravel, vanilla PHP
+- [x] Create `.test` domain routing (nginx vhost + hosts file)
+- [x] Link/unlink sites UI
 - [ ] Per-site PHP version pinning
 - [ ] SSL certificate generation
 
 ### Service Management
 - [x] Services view UI
-- [ ] Start/stop nginx
+- [x] Start/stop nginx
+- [x] Start/stop MySQL
+- [x] Start/stop Redis
+- [x] Status monitoring (running/stopped)
+- [x] Version detection
 - [ ] Start/stop PHP-FPM
-- [ ] Start/stop MySQL
-- [ ] Start/stop Redis
-- [ ] Status monitoring (running/stopped)
 - [ ] Auto-start on app launch
 - [ ] View service logs
 
@@ -73,10 +75,19 @@ A native desktop application for managing local PHP/Node.js development environm
 
 ### System Integration
 - [x] Configuration persistence (JSON file)
+- [x] Cross-platform path handling (Windows/macOS/Linux)
 - [ ] System tray icon
 - [ ] Minimize to tray
 - [ ] SQLite database for config
 - [ ] Windows startup option
+- [ ] Auto-updater (Tauri updater plugin)
+
+### Harvest Standalone Structure
+- [x] `C:\harvest\bin\` - Service binaries (nginx, mysql, redis, php)
+- [x] `C:\harvest\etc\` - Config files (nginx.conf, vhosts, ssl)
+- [x] `C:\harvest\logs\` - Service logs
+- [ ] Configurable harvest home path
+- [ ] First-run setup wizard
 
 ---
 
@@ -120,7 +131,8 @@ harvest/
 │   │       ├── sites.rs          # Site scanning & actions
 │   │       ├── php.rs            # PHP version management
 │   │       ├── node.rs           # Node.js & package managers
-│   │       └── services.rs       # Service management (Phase 2)
+│   │       ├── services.rs       # Service management
+│   │       └── vhosts.rs         # Vhost & domain management
 │   ├── Cargo.toml
 │   └── tauri.conf.json
 ├── index.html
@@ -164,6 +176,23 @@ get_installed_node_versions() -> Vec<InstalledVersion>
 install_node_version(app: AppHandle, version: String) -> Result<(), String>
 uninstall_node_version(version: String) -> Result<(), String>
 get_package_managers() -> Vec<PackageManager>
+```
+
+### Services (`commands/services.rs`)
+```rust
+get_services() -> Vec<ServiceInfo>
+start_service(id: String) -> Result<(), String>
+stop_service(id: String) -> Result<(), String>
+restart_service(id: String) -> Result<(), String>
+```
+
+### Vhosts (`commands/vhosts.rs`)
+```rust
+get_vhost_status(site_name: String) -> VhostStatus
+get_all_vhost_statuses(site_names: Vec<String>) -> Vec<VhostStatus>
+link_site(site_name: String, root_path: String) -> Result<String, String>
+unlink_site(site_name: String) -> Result<String, String>
+check_nginx_config() -> Result<String, String>
 ```
 
 ---
@@ -211,20 +240,81 @@ bun run tauri build
 - [x] Package managers detection
 - [x] Basic site scanning
 
-### Phase 2 - Service Management
-- [ ] nginx bundling and management
-- [ ] PHP-FPM configuration
-- [ ] MySQL/MariaDB integration
-- [ ] Redis integration
+### Phase 2 (Complete) - Service Management
+- [x] Standalone `C:\harvest` folder structure
+- [x] nginx, MySQL, Redis service detection
+- [x] Start/stop/restart services
+- [x] Service status monitoring
+- [x] Version detection for services
 
-### Phase 3 - Domain Routing
-- [ ] Hosts file management
-- [ ] .test domain routing
-- [ ] SSL certificate generation
-- [ ] Per-site configuration
+### Phase 3 (In Progress) - Domain Routing
+- [x] Nginx vhost config generation
+- [x] Hosts file management (with UAC elevation)
+- [x] Site link/unlink UI
+- [ ] SSL certificate generation (self-signed with local CA)
+- [ ] Per-site PHP version switching
 
-### Phase 4 - Polish
+### Phase 4 - Standalone Mode
+- [ ] Configurable Harvest home path (e.g., `D:\Harvest`, `C:\Dev\Harvest`)
+- [ ] First-run setup wizard to pick install location
+- [ ] Small config in AppData pointing to real Harvest folder
+- [ ] Fully portable - move the whole folder anywhere
+- [ ] **Download services from official sources:**
+  - [ ] nginx (from nginx.org)
+  - [ ] MySQL (from dev.mysql.com)
+  - [ ] Redis (from GitHub releases)
+  - [ ] PHP versions (already implemented)
+- [ ] Service install/uninstall UI (like PHP versions page)
+- [ ] No Laragon dependency - completely standalone
+
+### Phase 5 - Dashboard & Polish
+- [ ] Quick stats overview (sites count, services status)
+- [ ] Services compact status cards with toggle
+- [ ] Recent sites quick access
 - [ ] System tray integration
 - [ ] Auto-updates
 - [ ] Backup/restore settings
-- [ ] Plugin system for additional services
+
+### Future Ideas
+
+**Database Management**
+- [ ] Create/drop MySQL databases
+- [ ] Database GUI (like TablePlus/HeidiSQL embedded)
+- [ ] Import/export SQL dumps
+- [ ] Database backups scheduling
+
+**Developer Tools**
+- [ ] Log viewer for nginx/PHP/MySQL (tail -f style)
+- [ ] PHP error log viewer with syntax highlighting
+- [ ] Composer integration (install, update, require)
+- [ ] Artisan command runner for Laravel
+- [ ] October CMS artisan commands
+
+**Site Features**
+- [ ] Site templates (create new Laravel, October, vanilla PHP)
+- [ ] Clone site from Git repository
+- [ ] Site backups (files + database)
+- [ ] Favorite/pin sites to top
+- [ ] Site groups/folders
+- [ ] Site notes/descriptions
+
+**Sharing & Collaboration**
+- [ ] Share sites via tunneling (like Expose/ngrok)
+- [ ] QR code for mobile testing
+- [ ] Local network sharing (access from phone)
+
+**Quality of Life**
+- [ ] Global search (sites, services, settings)
+- [ ] Keyboard shortcuts
+- [ ] Command palette (Ctrl+K)
+- [ ] Notifications for service crashes
+- [ ] Health checks (disk space, memory)
+- [ ] Dark/light theme toggle
+
+**Advanced**
+- [ ] Multiple PHP-FPM pools
+- [ ] Xdebug configuration per site
+- [ ] Mail catcher (like Mailhog/Mailpit)
+- [ ] Queue worker management (Laravel Horizon)
+- [ ] Cron job scheduler
+- [ ] Docker integration (optional)
