@@ -244,6 +244,7 @@ cd src-tauri && cargo test --test services_tests
 cd src-tauri && cargo test --test node_tests
 cd src-tauri && cargo test --test php_tests
 cd src-tauri && cargo test --test types_tests
+cd src-tauri && cargo test --test config_tests
 ```
 
 ### Test Structure
@@ -257,7 +258,8 @@ src-tauri/
     ├── vhosts_tests.rs     # 14 tests - Nginx config, hosts file parsing
     ├── services_tests.rs   # 9 tests - Version extraction from CLI output
     ├── node_tests.rs       # 12 tests - Download URLs, folder parsing
-    └── php_tests.rs        # 9 tests - PHP version parsing
+    ├── php_tests.rs        # 9 tests - PHP version parsing
+    └── config_tests.rs     # 18 tests - PATH normalization and manipulation
 ```
 
 ### Prerequisites for Running Tests

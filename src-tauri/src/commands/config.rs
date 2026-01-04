@@ -114,6 +114,33 @@ pub fn validate_harvest_path(path: String) -> Result<bool, String> {
 
 // ============ PATH Management Commands ============
 
+/// Normalize a path for comparison (Windows-style with backslashes, lowercase)
+pub fn normalize_path_for_comparison(path: &str) -> String {
+    path.replace('/', "\\").to_lowercase().trim().trim_end_matches('\\').to_string()
+}
+
+/// Check if a path exists in a PATH-style string (semicolon-separated on Windows)
+pub fn path_exists_in_pathvar(path: &str, path_var: &str, separator: char) -> bool {
+    let normalized = normalize_path_for_comparison(path);
+    path_var.split(separator).any(|p| {
+        let p_normalized = normalize_path_for_comparison(p);
+        p_normalized == normalized
+    })
+}
+
+/// Filter out a path from a PATH-style string
+pub fn filter_path_from_pathvar(path_to_remove: &str, path_var: &str, separator: char) -> String {
+    let normalized = normalize_path_for_comparison(path_to_remove);
+    path_var
+        .split(separator)
+        .filter(|p| {
+            let p_normalized = normalize_path_for_comparison(p);
+            p_normalized != normalized
+        })
+        .collect::<Vec<&str>>()
+        .join(&separator.to_string())
+}
+
 /// Check if a specific path is in the user's PATH environment variable
 #[tauri::command]
 pub fn is_in_path(path: String) -> bool {
