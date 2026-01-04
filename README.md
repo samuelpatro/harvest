@@ -214,7 +214,7 @@ bun run tauri build
 
 ### Rust Backend Tests
 
-The Rust backend includes comprehensive unit tests for core functionality:
+The Rust backend includes comprehensive integration tests in the `tests/` directory:
 
 ```bash
 # Run all Rust tests
@@ -223,25 +223,28 @@ cd src-tauri && cargo test
 # Run tests with output
 cd src-tauri && cargo test -- --nocapture
 
-# Run specific test module
-cd src-tauri && cargo test sites::tests
-cd src-tauri && cargo test vhosts::tests
-cd src-tauri && cargo test services::tests
-cd src-tauri && cargo test node::tests
-cd src-tauri && cargo test php::tests
-cd src-tauri && cargo test types::tests
+# Run specific test file
+cd src-tauri && cargo test --test sites_tests
+cd src-tauri && cargo test --test vhosts_tests
+cd src-tauri && cargo test --test services_tests
+cd src-tauri && cargo test --test node_tests
+cd src-tauri && cargo test --test php_tests
+cd src-tauri && cargo test --test types_tests
 ```
 
-### Test Coverage
+### Test Structure
 
-| Module | Tests | Coverage |
-|--------|-------|----------|
-| `types/mod.rs` | 10 tests | AppConfig, Site, StackItem, InstalledVersion, etc. |
-| `commands/sites.rs` | 12 tests | Version parsing, site ID generation, domain generation |
-| `commands/vhosts.rs` | 14 tests | Nginx config generation, hosts file parsing |
-| `commands/services.rs` | 12 tests | Version extraction, service config validation |
-| `commands/node.rs` | 12 tests | Download URLs, folder parsing, version cleaning |
-| `commands/php.rs` | 9 tests | PHP version parsing, folder name extraction |
+```
+src-tauri/
+├── src/           # Source code (no inline tests)
+└── tests/         # Integration tests
+    ├── types_tests.rs      # 10 tests - AppConfig, Site, StackItem, etc.
+    ├── sites_tests.rs      # 12 tests - Version parsing, site ID generation
+    ├── vhosts_tests.rs     # 14 tests - Nginx config, hosts file parsing
+    ├── services_tests.rs   # 9 tests - Version extraction from CLI output
+    ├── node_tests.rs       # 12 tests - Download URLs, folder parsing
+    └── php_tests.rs        # 9 tests - PHP version parsing
+```
 
 ### Prerequisites for Running Tests
 
