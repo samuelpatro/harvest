@@ -253,13 +253,13 @@ cd src-tauri && cargo test --test config_tests
 src-tauri/
 ├── src/           # Source code (no inline tests)
 └── tests/         # Integration tests
-    ├── types_tests.rs      # 10 tests - AppConfig, Site, StackItem, etc.
-    ├── sites_tests.rs      # 12 tests - Version parsing, site ID generation
-    ├── vhosts_tests.rs     # 14 tests - Nginx config, hosts file parsing
+    ├── types_tests.rs      # 9 tests - AppConfig, Site, StackItem, etc.
+    ├── sites_tests.rs      # 16 tests - Version parsing, site ID generation
+    ├── vhosts_tests.rs     # 16 tests - Nginx config, hosts file parsing
     ├── services_tests.rs   # 9 tests - Version extraction from CLI output
-    ├── node_tests.rs       # 12 tests - Download URLs, folder parsing
-    ├── php_tests.rs        # 9 tests - PHP version parsing
-    └── config_tests.rs     # 18 tests - PATH normalization and manipulation
+    ├── node_tests.rs       # 13 tests - Download URLs, folder parsing
+    ├── php_tests.rs        # 12 tests - PHP version parsing
+    └── config_tests.rs     # 27 tests - PATH normalization and manipulation
 ```
 
 ### Prerequisites for Running Tests
