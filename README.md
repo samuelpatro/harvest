@@ -31,7 +31,7 @@ A native desktop application for managing local PHP/Node.js development environm
 - [x] Update detection (show when newer version available)
 - [x] PHP extensions management (enable/disable via php.ini)
 - [ ] Per-site PHP version switching
-- [ ] Add PHP to Windows PATH
+- [x] Add PHP to Windows PATH
 
 ### Node.js Management
 - [x] Fetch available Node.js versions from nodejs.org
@@ -40,8 +40,8 @@ A native desktop application for managing local PHP/Node.js development environm
 - [x] Uninstall Node.js versions
 - [x] Update detection
 - [x] Package managers detection (npm, yarn, pnpm, bun)
-- [ ] Grouped version display (like PHP)
-- [ ] Add Node to Windows PATH
+- [x] Grouped version display (like PHP)
+- [x] Add Node to Windows PATH
 
 ### Site Management
 - [x] Scan directories for projects
@@ -153,6 +153,16 @@ harvest/
 ```rust
 get_config() -> AppConfig
 save_config(config: AppConfig) -> Result<(), String>
+is_first_run() -> bool
+get_harvest_home() -> String
+initialize_harvest_home(path: String) -> Result<(), String>
+validate_harvest_path(path: String) -> Result<bool, String>
+// PATH Management
+is_in_path(path: String) -> bool
+add_to_path(path: String) -> Result<(), String>
+remove_from_path(path: String) -> Result<(), String>
+get_default_php_path() -> Option<String>
+get_default_node_path() -> Option<String>
 ```
 
 ### Sites (`commands/sites.rs`)
@@ -234,6 +244,7 @@ cd src-tauri && cargo test --test services_tests
 cd src-tauri && cargo test --test node_tests
 cd src-tauri && cargo test --test php_tests
 cd src-tauri && cargo test --test types_tests
+cd src-tauri && cargo test --test config_tests
 ```
 
 ### Test Structure
@@ -247,7 +258,8 @@ src-tauri/
     ├── vhosts_tests.rs     # 14 tests - Nginx config, hosts file parsing
     ├── services_tests.rs   # 9 tests - Version extraction from CLI output
     ├── node_tests.rs       # 12 tests - Download URLs, folder parsing
-    └── php_tests.rs        # 9 tests - PHP version parsing
+    ├── php_tests.rs        # 9 tests - PHP version parsing
+    └── config_tests.rs     # 18 tests - PATH normalization and manipulation
 ```
 
 ### Prerequisites for Running Tests
@@ -303,18 +315,18 @@ On Windows, no additional dependencies are required.
 - [ ] SSL certificate generation (self-signed with local CA)
 - [ ] Per-site PHP version switching
 
-### Phase 4 - Standalone Mode
-- [ ] Configurable Harvest home path (e.g., `D:\Harvest`, `C:\Dev\Harvest`)
-- [ ] First-run setup wizard to pick install location
-- [ ] Small config in AppData pointing to real Harvest folder
-- [ ] Fully portable - move the whole folder anywhere
-- [ ] **Download services from official sources:**
-  - [ ] nginx (from nginx.org)
-  - [ ] MySQL (from dev.mysql.com)
-  - [ ] Redis (from GitHub releases)
-  - [ ] PHP versions (already implemented)
-- [ ] Service install/uninstall UI (like PHP versions page)
-- [ ] No Laragon dependency - completely standalone
+### Phase 4 (Complete) - Standalone Mode
+- [x] Configurable Harvest home path (e.g., `D:\Harvest`, `C:\Dev\Harvest`)
+- [x] First-run setup wizard to pick install location
+- [x] Small config in AppData pointing to real Harvest folder
+- [x] Fully portable - move the whole folder anywhere
+- [x] **Download services from official sources:**
+  - [x] nginx (from nginx.org)
+  - [x] MySQL (from dev.mysql.com)
+  - [x] Redis (from GitHub releases)
+  - [x] PHP versions (already implemented)
+- [x] Service install/uninstall UI (like PHP versions page)
+- [x] No Laragon dependency - completely standalone
 
 ### Phase 5 - Dashboard & Polish
 - [ ] Quick stats overview (sites count, services status)

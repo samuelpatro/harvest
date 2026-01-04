@@ -2,7 +2,7 @@ pub mod commands;
 pub mod types;
 
 use commands::{
-    config::{get_config, save_config},
+    config::{get_config, save_config, is_first_run, get_harvest_home, initialize_harvest_home, validate_harvest_path, is_in_path, add_to_path, remove_from_path, get_default_php_path, get_default_node_path},
     sites::{scan_sites, open_in_editor, open_in_terminal, open_in_browser},
     php::{
         get_available_php_versions, get_installed_php_versions,
@@ -14,7 +14,7 @@ use commands::{
         install_node_version, uninstall_node_version,
         get_package_managers,
     },
-    services::{get_services, start_service, stop_service, restart_service},
+    services::{get_services, start_service, stop_service, restart_service, get_installable_services, install_service, uninstall_service},
     vhosts::{get_vhost_status, get_all_vhost_statuses, link_site, unlink_site, check_nginx_config},
 };
 
@@ -28,6 +28,16 @@ pub fn run() {
             // Config
             get_config,
             save_config,
+            is_first_run,
+            get_harvest_home,
+            initialize_harvest_home,
+            validate_harvest_path,
+            // PATH Management
+            is_in_path,
+            add_to_path,
+            remove_from_path,
+            get_default_php_path,
+            get_default_node_path,
             // Sites
             scan_sites,
             open_in_editor,
@@ -51,6 +61,9 @@ pub fn run() {
             start_service,
             stop_service,
             restart_service,
+            get_installable_services,
+            install_service,
+            uninstall_service,
             // Vhosts
             get_vhost_status,
             get_all_vhost_statuses,

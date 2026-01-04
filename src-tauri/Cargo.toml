@@ -31,3 +31,6 @@ tokio = { version = "1", features = ["fs", "io-util"] }
 zip = "2"
 futures-util = "0.3"
 
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+

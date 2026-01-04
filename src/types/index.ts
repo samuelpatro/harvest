@@ -32,7 +32,24 @@ export interface PhpVersion {
 }
 
 export interface AppConfig {
+  harvest_home: string
   harvest_paths: string[]
   editor_command: string
   terminal_command: string
+  first_run_complete: boolean
+}
+
+export interface ServiceVersion {
+  version: string
+  download_url: string
+  filename: string
+}
+
+export interface InstallableService {
+  id: string
+  name: string
+  description: string
+  installed: boolean
+  version?: string
+  available_versions: ServiceVersion[]
 }

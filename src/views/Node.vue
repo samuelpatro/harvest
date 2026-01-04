@@ -25,6 +25,15 @@ interface NodeVersion {
   downloadUrl?: string
 }
 
+interface NodeVersionGroup {
+  majorVersion: string
+  lts: boolean
+  versions: NodeVersion[]
+  latestVersion?: string
+  hasUpdate: boolean
+  isExpanded: boolean
+}
+
 interface PackageManager {
   name: string
   command: string
@@ -34,14 +43,57 @@ interface PackageManager {
 }
 
 const versions = ref<NodeVersion[]>([])
+const versionGroups = ref<NodeVersionGroup[]>([])
 const packageManagers = ref<PackageManager[]>([])
 const loading = ref(true)
 const loadingPM = ref(true)
 const error = ref<string | null>(null)
+const defaultPath = ref<string | null>(null)
 let unlisten: UnlistenFn | null = null
 
 const installedCount = computed(() => versions.value.filter(v => v.installed).length)
 const updatesAvailable = computed(() => versions.value.filter(v => v.hasUpdate).length)
+
+async function loadDefaultPath() {
+  try {
+    defaultPath.value = await invoke<string | null>('get_default_node_path')
+  } catch (e) {
+    console.error('Failed to get default Node path:', e)
+    defaultPath.value = null
+  }
+}
+
+async function setAsDefault(version: NodeVersion) {
+  if (!version.path) return
+  try {
+    // Remove old path if exists
+    if (defaultPath.value) {
+      await invoke('remove_from_path', { path: defaultPath.value })
+    }
+    // Add new path
+    await invoke('add_to_path', { path: version.path })
+    await loadDefaultPath()
+  } catch (e) {
+    console.error('Failed to set as default:', e)
+    error.value = `Failed to set Node ${version.installedVersion || version.version} as default: ${e}`
+  }
+}
+
+async function removeFromPath(version: NodeVersion) {
+  if (!version.path) return
+  try {
+    await invoke('remove_from_path', { path: version.path })
+    await loadDefaultPath()
+  } catch (e) {
+    console.error('Failed to remove from PATH:', e)
+    error.value = `Failed to remove Node ${version.installedVersion || version.version} from PATH: ${e}`
+  }
+}
+
+function isDefaultVersion(version: NodeVersion): boolean {
+  if (!defaultPath.value || !version.path) return false
+  return defaultPath.value.toLowerCase().replace(/\\/g, '/') === version.path.toLowerCase().replace(/\\/g, '/')
+}
 
 async function loadVersions() {
   loading.value = true
@@ -71,6 +123,41 @@ async function loadVersions() {
         downloadUrl: av.download_url
       }
     })
+
+    // Build grouped versions (group by major version)
+    const groups = new Map<string, NodeVersionGroup>()
+
+    for (const v of versions.value) {
+      const majorVersion = v.version.split('.')[0]
+
+      if (!groups.has(majorVersion)) {
+        groups.set(majorVersion, {
+          majorVersion,
+          lts: v.lts || false,
+          versions: [],
+          latestVersion: v.latestVersion,
+          hasUpdate: false,
+          isExpanded: false
+        })
+      }
+
+      const group = groups.get(majorVersion)!
+      group.versions.push(v)
+      if (v.hasUpdate) group.hasUpdate = true
+      if (v.lts) group.lts = true
+    }
+
+    // Sort groups by major version descending
+    versionGroups.value = Array.from(groups.values()).sort(
+      (a, b) => parseInt(b.majorVersion) - parseInt(a.majorVersion)
+    )
+
+    // Auto-expand groups with installed versions
+    for (const group of versionGroups.value) {
+      if (group.versions.some(v => v.installed)) {
+        group.isExpanded = true
+      }
+    }
   } catch (e) {
     console.error('Failed to load Node versions:', e)
     error.value = String(e)
@@ -91,6 +178,22 @@ async function loadVersions() {
       status: '',
       lts: v.lts
     }))
+
+    // Build fallback groups
+    versionGroups.value = fallbackVersions.map(v => ({
+      majorVersion: v.version,
+      lts: v.lts,
+      versions: [{
+        version: v.version,
+        installed: false,
+        installing: false,
+        progress: 0,
+        status: '',
+        lts: v.lts
+      }],
+      hasUpdate: false,
+      isExpanded: false
+    }))
   } finally {
     loading.value = false
   }
@@ -106,6 +209,14 @@ function compareVersions(a: string, b: string): number {
     if (aVal < bVal) return -1
   }
   return 0
+}
+
+function toggleGroup(group: NodeVersionGroup) {
+  group.isExpanded = !group.isExpanded
+}
+
+function getInstalledVersionsInGroup(group: NodeVersionGroup): NodeVersion[] {
+  return group.versions.filter(v => v.installed)
 }
 
 async function installVersion(version: NodeVersion) {
@@ -126,10 +237,14 @@ async function installVersion(version: NodeVersion) {
 }
 
 async function uninstallVersion(version: NodeVersion) {
-  if (!confirm(`Are you sure you want to uninstall Node ${version.version}?`)) {
+  if (!confirm(`Are you sure you want to uninstall Node ${version.installedVersion || version.version}?`)) {
     return
   }
   try {
+    // If this is the default version, remove from PATH first
+    if (isDefaultVersion(version)) {
+      await removeFromPath(version)
+    }
     await invoke('uninstall_node_version', { version: version.version })
     await loadVersions()
   } catch (e) {
@@ -153,7 +268,7 @@ async function loadPackageManagers() {
 
 
 onMounted(async () => {
-  await Promise.all([loadVersions(), loadPackageManagers()])
+  await Promise.all([loadVersions(), loadPackageManagers(), loadDefaultPath()])
 
   // Listen for progress events
   unlisten = await listen<{ type: string; version: string; status: string; progress: number }>('install-progress', (event) => {
@@ -183,6 +298,12 @@ onUnmounted(() => {
     <PageHeader title="Node" :subtitle="`${installedCount} installed${updatesAvailable > 0 ? ` · ${updatesAvailable} update${updatesAvailable > 1 ? 's' : ''} available` : ''}`" />
 
     <div class="page-content">
+      <!-- Error Banner -->
+      <div v-if="error" class="error-banner">
+        <span>{{ error }}</span>
+        <button class="error-dismiss" @click="error = null">&times;</button>
+      </div>
+
       <!-- Versions Section -->
       <section class="content-section">
         <h2 class="section-title">Versions</h2>
@@ -199,64 +320,126 @@ onUnmounted(() => {
             <span class="col-status">Status</span>
           </div>
           <div class="table-body">
-            <div
-              v-for="version in versions"
-              :key="version.version"
-              class="table-row"
-              :class="{ installed: version.installed, 'has-update': version.hasUpdate }"
-            >
-              <span class="col-version">
-                {{ version.version }}
-                <span v-if="version.lts" class="lts-badge">LTS</span>
-                <span v-if="version.installedVersion" class="installed-version">
-                  ({{ version.installedVersion }})
-                </span>
-                <span v-if="version.hasUpdate" class="update-badge" :title="`Update to ${version.latestVersion}`">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 19V5M5 12l7-7 7 7" />
-                  </svg>
-                  {{ version.latestVersion }}
-                </span>
-              </span>
-              <span class="col-status">
-                <div v-if="version.installing" class="install-progress">
-                  <div class="progress-bar">
-                    <div class="progress-fill" :style="{ width: `${version.progress}%` }" />
-                  </div>
-                  <span class="progress-text">{{ version.status === 'extracting' ? 'Extracting...' : `${version.progress}%` }}</span>
-                </div>
-                <template v-else-if="version.installed">
-                  <button
-                    v-if="version.hasUpdate"
-                    class="btn-update"
-                    @click="installVersion(version)"
-                  >
+            <template v-for="group in versionGroups" :key="group.majorVersion">
+              <!-- Group Header -->
+              <div
+                class="table-row group-header"
+                :class="{
+                  'has-installed': group.versions.some(v => v.installed),
+                  'has-update': group.hasUpdate
+                }"
+                @click="toggleGroup(group)"
+              >
+                <span class="col-version">
+                  <span class="expand-icon" :class="{ expanded: group.isExpanded }">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                  </span>
+                  Node {{ group.majorVersion }}
+                  <span v-if="group.lts" class="lts-badge">LTS</span>
+                  <span v-if="getInstalledVersionsInGroup(group).length > 0" class="installed-count">
+                    {{ getInstalledVersionsInGroup(group).length }} installed
+                  </span>
+                  <span v-if="group.hasUpdate" class="update-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 19V5M5 12l7-7 7 7" />
+                    </svg>
                     Update
-                  </button>
-                  <span v-else class="status-installed">
+                  </span>
+                </span>
+                <span class="col-status">
+                  <span v-if="group.versions.some(v => v.installed)" class="status-installed">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   </span>
-                  <button
-                    class="btn-uninstall"
-                    @click="uninstallVersion(version)"
-                    title="Uninstall"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </template>
-                <button
-                  v-else
-                  class="btn-install"
-                  @click="installVersion(version)"
+                </span>
+              </div>
+
+              <!-- Expanded Version List -->
+              <template v-if="group.isExpanded">
+                <div
+                  v-for="version in group.versions"
+                  :key="version.version"
+                  class="table-row version-row"
+                  :class="{
+                    installed: version.installed,
+                    'has-update': version.hasUpdate,
+                    'is-default': isDefaultVersion(version)
+                  }"
                 >
-                  Install
-                </button>
-              </span>
-            </div>
+                  <span class="col-version">
+                    <span class="version-indent"></span>
+                    {{ version.latestVersion || version.version }}
+                    <span v-if="version.lts" class="lts-badge">LTS</span>
+                    <span v-if="isDefaultVersion(version)" class="default-badge">PATH</span>
+                    <span v-if="version.installedVersion && version.installedVersion !== version.latestVersion" class="installed-version">
+                      (installed: {{ version.installedVersion }})
+                    </span>
+                    <span v-if="version.hasUpdate" class="update-badge" :title="`Update to ${version.latestVersion}`">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 19V5M5 12l7-7 7 7" />
+                      </svg>
+                      {{ version.latestVersion }}
+                    </span>
+                  </span>
+                  <span class="col-status">
+                    <div v-if="version.installing" class="install-progress">
+                      <div class="progress-bar">
+                        <div class="progress-fill" :style="{ width: `${version.progress}%` }" />
+                      </div>
+                      <span class="progress-text">{{ version.status === 'extracting' ? 'Extracting...' : `${version.progress}%` }}</span>
+                    </div>
+                    <template v-else-if="version.installed">
+                      <div class="installed-row-actions">
+                        <button
+                          v-if="version.hasUpdate"
+                          class="btn-update"
+                          @click.stop="installVersion(version)"
+                        >
+                          Update
+                        </button>
+                        <template v-else>
+                          <button
+                            v-if="!isDefaultVersion(version)"
+                            class="btn-default"
+                            @click.stop="setAsDefault(version)"
+                            title="Add to PATH"
+                          >
+                            Set as Default
+                          </button>
+                          <button
+                            v-else
+                            class="btn-remove-path"
+                            @click.stop="removeFromPath(version)"
+                            title="Remove from PATH"
+                          >
+                            Remove
+                          </button>
+                        </template>
+                        <button
+                          class="btn-uninstall"
+                          @click.stop="uninstallVersion(version)"
+                          title="Uninstall"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </template>
+                    <button
+                      v-else
+                      class="btn-install"
+                      @click.stop="installVersion(version)"
+                    >
+                      Install
+                    </button>
+                  </span>
+                </div>
+              </template>
+            </template>
           </div>
         </div>
       </section>
@@ -411,6 +594,60 @@ onUnmounted(() => {
   background: rgba(245, 158, 11, 0.03);
 }
 
+.table-row.is-default {
+  background: rgba(245, 158, 11, 0.08);
+  border-left: 3px solid var(--color-accent);
+}
+
+/* Group Header Styles */
+.group-header {
+  cursor: pointer;
+  background: var(--color-bg-elevated);
+  font-weight: 500;
+}
+
+.group-header:hover {
+  background: var(--color-bg-card);
+}
+
+.group-header.has-installed {
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.expand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 4px;
+  transition: transform 0.2s ease;
+}
+
+.expand-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.expand-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.version-row {
+  padding-left: 24px;
+}
+
+.version-indent {
+  display: inline-block;
+  width: 16px;
+}
+
+.installed-count {
+  font-size: 11px;
+  color: var(--color-accent);
+  margin-left: 8px;
+}
+
 .col-version {
   flex: 1;
   font-size: 14px;
@@ -424,6 +661,16 @@ onUnmounted(() => {
   padding: 2px 6px;
   background: rgba(34, 197, 94, 0.15);
   color: #22c55e;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.default-badge {
+  padding: 2px 6px;
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--color-accent);
   font-size: 10px;
   font-weight: 600;
   border-radius: 4px;
@@ -475,11 +722,54 @@ onUnmounted(() => {
 }
 
 .col-status {
-  width: 140px;
+  width: 200px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+}
+
+.installed-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-default {
+  padding: 6px 12px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 6px;
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-default:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: var(--color-accent);
+}
+
+.btn-remove-path {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-remove-path:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #ef4444;
 }
 
 .status-installed {
@@ -508,7 +798,6 @@ onUnmounted(() => {
   color: var(--color-text-muted);
   cursor: pointer;
   transition: all 0.15s ease;
-  margin-left: 8px;
 }
 
 .btn-uninstall:hover {
@@ -657,25 +946,6 @@ onUnmounted(() => {
   font-family: var(--font-mono);
 }
 
-.pm-update-available {
-  color: #3b82f6;
-  font-weight: 500;
-}
-
-.pm-up-to-date {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  color: var(--color-accent);
-}
-
-.pm-up-to-date svg {
-  width: 18px;
-  height: 18px;
-}
-
 .pm-not-installed {
   font-size: 12px;
   color: var(--color-text-muted);
@@ -684,79 +954,8 @@ onUnmounted(() => {
 .pm-desc {
   font-size: 12px;
   color: var(--color-text-muted);
-  margin: 0 0 12px 0;
+  margin: 0;
   line-height: 1.4;
-}
-
-.pm-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.pm-loading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-.loading-spinner.small {
-  width: 14px;
-  height: 14px;
-  border-width: 2px;
-}
-
-.btn-pm {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-pm svg {
-  width: 14px;
-  height: 14px;
-}
-
-.btn-pm-install {
-  background: var(--color-accent);
-  border: 1px solid var(--color-accent);
-  color: #000;
-}
-
-.btn-pm-install:hover {
-  background: var(--color-accent-hover, #d97706);
-  border-color: var(--color-accent-hover, #d97706);
-}
-
-.btn-pm-update {
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-}
-
-.btn-pm-update:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-
-.btn-pm-remove {
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--color-text-muted);
-  padding: 6px;
-}
-
-.btn-pm-remove:hover {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #ef4444;
 }
 
 .error-banner {

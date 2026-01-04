@@ -6,6 +6,7 @@ use futures_util::StreamExt;
 use serde::Deserialize;
 use tauri::{AppHandle, Emitter};
 use crate::types::{AvailableVersion, InstalledVersion, PackageManager};
+use crate::commands::config::get_harvest_home;
 
 #[derive(Debug, Deserialize)]
 struct NodeDistVersion {
@@ -76,52 +77,34 @@ pub async fn get_available_node_versions() -> Result<Vec<AvailableVersion>, Stri
 #[tauri::command]
 pub fn get_installed_node_versions() -> Vec<InstalledVersion> {
     let mut versions = Vec::new();
+    let harvest_home = get_harvest_home();
 
-    // Check common Node paths
-    let node_dirs = vec![
-        PathBuf::from("C:/laragon/bin/nodejs"),
-        PathBuf::from("C:/Program Files/nodejs"),
-    ];
+    // Check Node.js directory in harvest home
+    let node_dir = PathBuf::from(&harvest_home).join("bin").join("nodejs");
 
-    for node_dir in node_dirs {
-        if node_dir.exists() && node_dir.is_dir() {
-            if let Ok(entries) = fs::read_dir(&node_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        let name = path.file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("");
+    if node_dir.exists() && node_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&node_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("");
 
-                        // Check if it's a Node directory (contains node.exe)
-                        let node_exe = path.join("node.exe");
-                        if node_exe.exists() {
-                            let version = extract_node_version(&path, name);
-                            if let Some(ver) = version {
-                                versions.push(InstalledVersion {
-                                    version: ver,
-                                    path: path.to_string_lossy().to_string(),
-                                });
-                            }
+                    // Check if it's a Node directory (contains node.exe or node)
+                    #[cfg(target_os = "windows")]
+                    let node_exe = path.join("node.exe");
+                    #[cfg(not(target_os = "windows"))]
+                    let node_exe = path.join("node");
+
+                    if node_exe.exists() {
+                        let version = extract_node_version(&path, name);
+                        if let Some(ver) = version {
+                            versions.push(InstalledVersion {
+                                version: ver,
+                                path: path.to_string_lossy().to_string(),
+                            });
                         }
-                    }
-                }
-            }
-        }
-    }
-
-    // Also check if node is directly in a path (not versioned subdirectories)
-    for node_dir in &[PathBuf::from("C:/Program Files/nodejs")] {
-        let node_exe = node_dir.join("node.exe");
-        if node_exe.exists() {
-            if let Ok(output) = Command::new(&node_exe).arg("-v").output() {
-                if let Ok(stdout) = String::from_utf8(output.stdout) {
-                    let ver = stdout.trim().trim_start_matches('v');
-                    if !ver.is_empty() && !versions.iter().any(|v| v.version == ver) {
-                        versions.push(InstalledVersion {
-                            version: ver.to_string(),
-                            path: node_dir.to_string_lossy().to_string(),
-                        });
                     }
                 }
             }
@@ -178,7 +161,8 @@ pub async fn install_node_version(app: AppHandle, version: String) -> Result<(),
     let download_url = get_node_download_url(&version)
         .ok_or_else(|| format!("Unknown Node.js version: {}", version))?;
 
-    let install_dir = PathBuf::from("C:/laragon/bin/nodejs");
+    let harvest_home = get_harvest_home();
+    let install_dir = PathBuf::from(&harvest_home).join("bin").join("nodejs");
     fs::create_dir_all(&install_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
 
     // Emit progress event
@@ -281,7 +265,8 @@ pub async fn install_node_version(app: AppHandle, version: String) -> Result<(),
 
 #[tauri::command]
 pub async fn uninstall_node_version(version: String) -> Result<(), String> {
-    let node_dir = PathBuf::from("C:/laragon/bin/nodejs");
+    let harvest_home = get_harvest_home();
+    let node_dir = PathBuf::from(&harvest_home).join("bin").join("nodejs");
 
     // Find the directory matching this version
     if let Ok(entries) = fs::read_dir(&node_dir) {
