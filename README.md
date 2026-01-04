@@ -253,7 +253,7 @@ cd src-tauri && cargo test --test config_tests
 src-tauri/
 ├── src/           # Source code (no inline tests)
 └── tests/         # Integration tests
-    ├── types_tests.rs      # 9 tests - AppConfig, Site, StackItem, etc.
+    ├── types_tests.rs      # 23 tests - AppConfig, Site, StackItem, InstallableService, etc.
     ├── sites_tests.rs      # 16 tests - Version parsing, site ID generation
     ├── vhosts_tests.rs     # 16 tests - Nginx config, hosts file parsing
     ├── services_tests.rs   # 9 tests - Version extraction from CLI output
