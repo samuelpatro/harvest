@@ -48,7 +48,8 @@ src-tauri/
 │       ├── sites.rs         # Site scanning, detection, open actions
 │       ├── php.rs           # PHP version management, extensions
 │       ├── node.rs          # Node.js versions, package managers
-│       └── services.rs      # Service management (Phase 2)
+│       ├── services.rs      # Service management (Phase 2)
+│       └── vhosts.rs        # Vhost & domain management
 ├── Cargo.toml
 └── tauri.conf.json
 ```
@@ -60,9 +61,9 @@ src-tauri/
 
 ## Design System
 
-- **Background**: `#0a0a0b` (primary), `#111113` (elevated), `#161618` (card)
+- **Background**: `#0d0d0f` (primary), `#18181b` (elevated), `#1c1c1f` (card)
 - **Accent**: `#f59e0b` (amber)
-- **Fonts**: System UI, JetBrains Mono (code)
+- **Fonts**: Outfit (UI), JetBrains Mono (code)
 - **Frameless window** with custom titlebar
 
 ## Tauri Commands
@@ -92,6 +93,19 @@ src-tauri/
 - `uninstall_node_version(version)` → `Result<(), String>`
 - `get_package_managers()` → `Vec<PackageManager>`
 
+### Service Commands (`commands/services.rs`)
+- `get_services()` → `Vec<ServiceInfo>`
+- `start_service(id)` → `Result<(), String>`
+- `stop_service(id)` → `Result<(), String>`
+- `restart_service(id)` → `Result<(), String>`
+
+### Vhost Commands (`commands/vhosts.rs`)
+- `get_vhost_status(site_name)` → `VhostStatus`
+- `get_all_vhost_statuses(site_names)` → `Vec<VhostStatus>`
+- `link_site(site_name, root_path)` → `Result<String, String>`
+- `unlink_site(site_name)` → `Result<String, String>`
+- `check_nginx_config()` → `Result<String, String>`
+
 ## Site Detection
 
 The Rust backend (`commands/sites.rs`) scans project directories and detects:
@@ -120,6 +134,8 @@ pub struct InstalledVersion { version, path }
 pub struct AvailableVersion { version, full_version, lts, download_url }
 pub struct PhpExtension { name, enabled, builtin }
 pub struct PackageManager { name, command, installed, version, description }
+pub struct ServiceInfo { id, name, status, port, pid, path, description, version }
+pub struct VhostStatus { site_name, domain, nginx_config_exists, hosts_entry_exists, is_linked }
 ```
 
 See `README.md` for full roadmap and feature checklist.
