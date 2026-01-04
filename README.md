@@ -254,18 +254,18 @@ bun run tauri build
 - [ ] SSL certificate generation (self-signed with local CA)
 - [ ] Per-site PHP version switching
 
-### Phase 4 - Standalone Mode
-- [ ] Configurable Harvest home path (e.g., `D:\Harvest`, `C:\Dev\Harvest`)
-- [ ] First-run setup wizard to pick install location
-- [ ] Small config in AppData pointing to real Harvest folder
-- [ ] Fully portable - move the whole folder anywhere
-- [ ] **Download services from official sources:**
-  - [ ] nginx (from nginx.org)
-  - [ ] MySQL (from dev.mysql.com)
-  - [ ] Redis (from GitHub releases)
-  - [ ] PHP versions (already implemented)
-- [ ] Service install/uninstall UI (like PHP versions page)
-- [ ] No Laragon dependency - completely standalone
+### Phase 4 (Complete) - Standalone Mode
+- [x] Configurable Harvest home path (e.g., `D:\Harvest`, `C:\Dev\Harvest`)
+- [x] First-run setup wizard to pick install location
+- [x] Small config in AppData pointing to real Harvest folder
+- [x] Fully portable - move the whole folder anywhere
+- [x] **Download services from official sources:**
+  - [x] nginx (from nginx.org)
+  - [x] MySQL (from dev.mysql.com)
+  - [x] Redis (from GitHub releases)
+  - [x] PHP versions (already implemented)
+- [x] Service install/uninstall UI (like PHP versions page)
+- [x] No Laragon dependency - completely standalone
 
 ### Phase 5 - Dashboard & Polish
 - [ ] Quick stats overview (sites count, services status)
