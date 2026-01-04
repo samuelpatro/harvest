@@ -98,6 +98,7 @@ harvest/
 ├── src/                          # Vue frontend
 │   ├── components/
 │   │   ├── PageHeader.vue        # Page title + subtitle
+│   │   ├── PhpSelector.vue       # Global PHP version selector
 │   │   ├── Sidebar.vue           # Navigation sidebar
 │   │   ├── ServiceCard.vue       # Service status card
 │   │   └── SiteCard.vue          # Site display card
@@ -114,6 +115,9 @@ harvest/
 │   │   └── config.ts             # App configuration
 │   ├── styles/
 │   │   └── main.css              # Global styles + CSS variables
+│   ├── tray/
+│   │   ├── TrayPopup.vue         # System tray popup UI
+│   │   └── main.ts               # Tray window entry point
 │   ├── types/
 │   │   └── index.ts              # TypeScript interfaces
 │   ├── App.vue
@@ -216,19 +220,19 @@ bun run tauri build
 
 ```css
 :root {
-  --color-bg: #0a0a0b;
-  --color-bg-elevated: #111113;
-  --color-bg-card: #161618;
-  --color-border: #232328;
+  --color-bg: #0d0d0f;
+  --color-bg-elevated: #18181b;
+  --color-bg-card: #1c1c1f;
+  --color-border: #27272a;
   --color-text: #fafafa;
-  --color-text-muted: #71717a;
+  --color-text-muted: #a1a1aa;
   --color-accent: #f59e0b;        /* Amber/Harvest */
   --color-success: #22c55e;
   --color-danger: #ef4444;
 }
 ```
 
-**Fonts:** System UI (Segoe UI on Windows), JetBrains Mono (code)
+**Fonts:** Outfit (headings/UI), JetBrains Mono (code)
 
 ---
 
