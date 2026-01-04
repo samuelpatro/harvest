@@ -185,7 +185,9 @@ fn get_service_version(exe_path: &PathBuf, version_arg: &Option<String>) -> Opti
     extract_version_from_string(&combined)
 }
 
-fn extract_version_from_string(s: &str) -> Option<String> {
+/// Extract version number from a string containing version info
+/// Looks for patterns like "1.24.0", "8.0.30", etc.
+pub fn extract_version_from_string(s: &str) -> Option<String> {
     // Look for patterns like "1.24.0", "8.0.30", etc.
     let mut version = String::new();
     let mut in_version = false;

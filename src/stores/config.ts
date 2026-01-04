@@ -1,23 +1,22 @@
 import { defineStore } from 'pinia'
+import { invoke } from '@tauri-apps/api/core'
 import type { AppConfig, PhpVersion } from '../types'
 
-const mockPhpVersions: PhpVersion[] = [
-  { version: '8.4', path: 'C:/laragon/bin/php/php-8.4', isDefault: true, isInstalled: true },
-  { version: '8.3', path: 'C:/laragon/bin/php/php-8.3', isDefault: false, isInstalled: true },
-  { version: '8.2', path: 'C:/laragon/bin/php/php-8.2', isDefault: false, isInstalled: true },
-  { version: '8.1', path: 'C:/laragon/bin/php/php-8.1', isDefault: false, isInstalled: true },
-]
+interface InstalledVersion {
+  version: string
+  path: string
+}
 
 export const useConfigStore = defineStore('config', {
   state: () => ({
     config: {
-      sitesDirectory: 'C:/laragon/www',
-      defaultPhp: '8.4',
-      editorCommand: 'code',
-      autoStart: true,
+      harvest_paths: ['C:/laragon/www'],
+      editor_command: 'code',
+      terminal_command: 'wt -d',
     } as AppConfig,
     phpVersions: [] as PhpVersion[],
     loading: false,
+    defaultPhpVersion: null as string | null,
   }),
 
   getters: {
@@ -28,32 +27,44 @@ export const useConfigStore = defineStore('config', {
   actions: {
     async fetchConfig() {
       this.loading = true
-      // TODO: Replace with actual Tauri invoke
-      // this.config = await invoke('get_config')
-      await new Promise(r => setTimeout(r, 200))
-      this.loading = false
+      try {
+        this.config = await invoke('get_config')
+      } catch (error) {
+        console.error('Failed to fetch config:', error)
+      } finally {
+        this.loading = false
+      }
     },
 
     async fetchPhpVersions() {
-      // TODO: Replace with actual Tauri invoke
-      // this.phpVersions = await invoke('get_php_versions')
-      await new Promise(r => setTimeout(r, 200))
-      this.phpVersions = mockPhpVersions
+      try {
+        const installed = await invoke<InstalledVersion[]>('get_installed_php_versions')
+        this.phpVersions = installed.map((v, index) => ({
+          version: v.version,
+          path: v.path,
+          isDefault: index === 0,
+          isInstalled: true,
+        }))
+      } catch (error) {
+        console.error('Failed to fetch PHP versions:', error)
+      }
     },
 
     async setGlobalPhp(version: string) {
-      // TODO: Replace with actual Tauri invoke
-      // await invoke('set_global_php', { version })
       this.phpVersions.forEach(v => {
         v.isDefault = v.version === version
       })
-      this.config.defaultPhp = version
+      this.defaultPhpVersion = version
     },
 
     async updateConfig(config: Partial<AppConfig>) {
-      // TODO: Replace with actual Tauri invoke
-      // await invoke('update_config', { config: { ...this.config, ...config } })
-      this.config = { ...this.config, ...config }
+      try {
+        const newConfig = { ...this.config, ...config }
+        await invoke('save_config', { config: newConfig })
+        this.config = newConfig
+      } catch (error) {
+        console.error('Failed to save config:', error)
+      }
     },
   },
 })

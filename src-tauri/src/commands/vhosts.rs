@@ -54,6 +54,7 @@ fn get_hosts_file_path() -> &'static str {
     { "/etc/hosts" }
 }
 
+/// Generate nginx server block configuration for a site
 fn generate_nginx_config(config: &VhostConfig, paths: &HarvestPaths) -> String {
     let root = config.root_path.replace('\\', "/");
 
@@ -107,12 +108,43 @@ fn generate_nginx_config(config: &VhostConfig, paths: &HarvestPaths) -> String {
     )
 }
 
+/// Get the path to the nginx config file for a site
 fn get_nginx_config_path(site_name: &str, paths: &HarvestPaths) -> PathBuf {
     PathBuf::from(&paths.nginx_sites_path).join(format!("auto.{}.test.conf", site_name))
 }
 
+/// Generate the nginx config filename for a site
+pub fn get_nginx_config_filename(site_name: &str) -> String {
+    format!("auto.{}.test.conf", site_name)
+}
+
 fn nginx_config_exists(site_name: &str, paths: &HarvestPaths) -> bool {
     get_nginx_config_path(site_name, paths).exists()
+}
+
+/// Check if a domain entry exists in the hosts file content
+pub fn check_hosts_entry_in_content(content: &str, domain: &str) -> bool {
+    content.lines().any(|line| {
+        let line = line.trim();
+        !line.starts_with('#') && line.contains(domain)
+    })
+}
+
+/// Generate a hosts file entry for a domain
+pub fn generate_hosts_entry(domain: &str) -> String {
+    format!("127.0.0.1 {}", domain)
+}
+
+/// Filter out a domain from hosts file content
+pub fn filter_hosts_content(content: &str, domain: &str) -> String {
+    content
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            trimmed.is_empty() || trimmed.starts_with('#') || !trimmed.contains(domain)
+        })
+        .collect::<Vec<&str>>()
+        .join("\n")
 }
 
 fn hosts_entry_exists(domain: &str) -> bool {

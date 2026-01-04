@@ -98,6 +98,7 @@ harvest/
 ├── src/                          # Vue frontend
 │   ├── components/
 │   │   ├── PageHeader.vue        # Page title + subtitle
+│   │   ├── PhpSelector.vue       # Global PHP version selector
 │   │   ├── Sidebar.vue           # Navigation sidebar
 │   │   ├── ServiceCard.vue       # Service status card
 │   │   └── SiteCard.vue          # Site display card
@@ -114,6 +115,9 @@ harvest/
 │   │   └── config.ts             # App configuration
 │   ├── styles/
 │   │   └── main.css              # Global styles + CSS variables
+│   ├── tray/
+│   │   ├── TrayPopup.vue         # System tray popup UI
+│   │   └── main.ts               # Tray window entry point
 │   ├── types/
 │   │   └── index.ts              # TypeScript interfaces
 │   ├── App.vue
@@ -210,25 +214,70 @@ bun run tauri dev
 bun run tauri build
 ```
 
+## Testing
+
+### Rust Backend Tests
+
+The Rust backend includes comprehensive integration tests in the `tests/` directory:
+
+```bash
+# Run all Rust tests
+cd src-tauri && cargo test
+
+# Run tests with output
+cd src-tauri && cargo test -- --nocapture
+
+# Run specific test file
+cd src-tauri && cargo test --test sites_tests
+cd src-tauri && cargo test --test vhosts_tests
+cd src-tauri && cargo test --test services_tests
+cd src-tauri && cargo test --test node_tests
+cd src-tauri && cargo test --test php_tests
+cd src-tauri && cargo test --test types_tests
+```
+
+### Test Structure
+
+```
+src-tauri/
+├── src/           # Source code (no inline tests)
+└── tests/         # Integration tests
+    ├── types_tests.rs      # 10 tests - AppConfig, Site, StackItem, etc.
+    ├── sites_tests.rs      # 12 tests - Version parsing, site ID generation
+    ├── vhosts_tests.rs     # 14 tests - Nginx config, hosts file parsing
+    ├── services_tests.rs   # 9 tests - Version extraction from CLI output
+    ├── node_tests.rs       # 12 tests - Download URLs, folder parsing
+    └── php_tests.rs        # 9 tests - PHP version parsing
+```
+
+### Prerequisites for Running Tests
+
+On Linux, you'll need Tauri development dependencies:
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+```
+
+On Windows, no additional dependencies are required.
+
 ---
 
 ## Design Theme
 
 ```css
 :root {
-  --color-bg: #0a0a0b;
-  --color-bg-elevated: #111113;
-  --color-bg-card: #161618;
-  --color-border: #232328;
+  --color-bg: #0d0d0f;
+  --color-bg-elevated: #18181b;
+  --color-bg-card: #1c1c1f;
+  --color-border: #27272a;
   --color-text: #fafafa;
-  --color-text-muted: #71717a;
+  --color-text-muted: #a1a1aa;
   --color-accent: #f59e0b;        /* Amber/Harvest */
   --color-success: #22c55e;
   --color-danger: #ef4444;
 }
 ```
 
-**Fonts:** System UI (Segoe UI on Windows), JetBrains Mono (code)
+**Fonts:** Outfit (headings/UI), JetBrains Mono (code)
 
 ---
 
