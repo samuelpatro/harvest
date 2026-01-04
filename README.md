@@ -31,7 +31,7 @@ A native desktop application for managing local PHP/Node.js development environm
 - [x] Update detection (show when newer version available)
 - [x] PHP extensions management (enable/disable via php.ini)
 - [ ] Per-site PHP version switching
-- [ ] Add PHP to Windows PATH
+- [x] Add PHP to Windows PATH
 
 ### Node.js Management
 - [x] Fetch available Node.js versions from nodejs.org
@@ -40,8 +40,8 @@ A native desktop application for managing local PHP/Node.js development environm
 - [x] Uninstall Node.js versions
 - [x] Update detection
 - [x] Package managers detection (npm, yarn, pnpm, bun)
-- [ ] Grouped version display (like PHP)
-- [ ] Add Node to Windows PATH
+- [x] Grouped version display (like PHP)
+- [x] Add Node to Windows PATH
 
 ### Site Management
 - [x] Scan directories for projects
@@ -153,6 +153,16 @@ harvest/
 ```rust
 get_config() -> AppConfig
 save_config(config: AppConfig) -> Result<(), String>
+is_first_run() -> bool
+get_harvest_home() -> String
+initialize_harvest_home(path: String) -> Result<(), String>
+validate_harvest_path(path: String) -> Result<bool, String>
+// PATH Management
+is_in_path(path: String) -> bool
+add_to_path(path: String) -> Result<(), String>
+remove_from_path(path: String) -> Result<(), String>
+get_default_php_path() -> Option<String>
+get_default_node_path() -> Option<String>
 ```
 
 ### Sites (`commands/sites.rs`)

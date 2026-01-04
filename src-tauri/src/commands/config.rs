@@ -111,3 +111,225 @@ pub fn validate_harvest_path(path: String) -> Result<bool, String> {
 
     Ok(true)
 }
+
+// ============ PATH Management Commands ============
+
+/// Check if a specific path is in the user's PATH environment variable
+#[tauri::command]
+pub fn is_in_path(path: String) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::enums::*;
+        use winreg::RegKey;
+
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        if let Ok(env) = hkcu.open_subkey("Environment") {
+            if let Ok(current_path) = env.get_value::<String, _>("Path") {
+                let normalized_path = path.replace('/', "\\").to_lowercase();
+                return current_path
+                    .split(';')
+                    .any(|p| p.to_lowercase().trim() == normalized_path ||
+                         p.to_lowercase().trim().trim_end_matches('\\') == normalized_path.trim_end_matches('\\'));
+            }
+        }
+        false
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Ok(env_path) = std::env::var("PATH") {
+            return env_path.split(':').any(|p| p == path);
+        }
+        false
+    }
+}
+
+/// Add a path to the user's PATH environment variable
+#[tauri::command]
+pub fn add_to_path(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::enums::*;
+        use winreg::RegKey;
+
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let env = hkcu.open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)
+            .map_err(|e| format!("Failed to open registry: {}", e))?;
+
+        let current_path: String = env.get_value("Path").unwrap_or_default();
+
+        // Normalize the path (use backslashes on Windows)
+        let normalized_path = path.replace('/', "\\");
+
+        // Check if already in PATH
+        let paths: Vec<&str> = current_path.split(';').collect();
+        let already_exists = paths.iter().any(|p| {
+            p.to_lowercase().trim() == normalized_path.to_lowercase() ||
+            p.to_lowercase().trim().trim_end_matches('\\') == normalized_path.to_lowercase().trim_end_matches('\\')
+        });
+
+        if already_exists {
+            return Ok(()); // Already in PATH
+        }
+
+        // Add the new path
+        let new_path = if current_path.is_empty() {
+            normalized_path
+        } else {
+            format!("{};{}", current_path.trim_end_matches(';'), normalized_path)
+        };
+
+        env.set_value("Path", &new_path)
+            .map_err(|e| format!("Failed to set PATH: {}", e))?;
+
+        // Broadcast WM_SETTINGCHANGE to notify other applications
+        broadcast_environment_change();
+
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        // On Unix systems, we'd need to modify shell profile files
+        // This is more complex and varies by shell
+        Err("PATH modification on this platform requires editing shell profile files manually.".to_string())
+    }
+}
+
+/// Remove a path from the user's PATH environment variable
+#[tauri::command]
+pub fn remove_from_path(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::enums::*;
+        use winreg::RegKey;
+
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let env = hkcu.open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)
+            .map_err(|e| format!("Failed to open registry: {}", e))?;
+
+        let current_path: String = env.get_value("Path").unwrap_or_default();
+        let normalized_path = path.replace('/', "\\").to_lowercase();
+
+        // Filter out the path we want to remove
+        let new_paths: Vec<&str> = current_path
+            .split(';')
+            .filter(|p| {
+                let p_lower = p.to_lowercase();
+                p_lower.trim() != normalized_path &&
+                p_lower.trim().trim_end_matches('\\') != normalized_path.trim_end_matches('\\')
+            })
+            .collect();
+
+        let new_path = new_paths.join(";");
+
+        env.set_value("Path", &new_path)
+            .map_err(|e| format!("Failed to set PATH: {}", e))?;
+
+        // Broadcast WM_SETTINGCHANGE to notify other applications
+        broadcast_environment_change();
+
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("PATH modification on this platform requires editing shell profile files manually.".to_string())
+    }
+}
+
+/// Get the current default PHP path (the one in PATH)
+#[tauri::command]
+pub fn get_default_php_path() -> Option<String> {
+    let harvest_home = get_harvest_home();
+    let php_dir = PathBuf::from(&harvest_home).join("bin").join("php");
+
+    if !php_dir.exists() {
+        return None;
+    }
+
+    // Check which PHP version directory is in PATH
+    if let Ok(entries) = fs::read_dir(&php_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let path_str = path.to_string_lossy().to_string();
+                if is_in_path(path_str.clone()) {
+                    return Some(path_str);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Get the current default Node.js path (the one in PATH)
+#[tauri::command]
+pub fn get_default_node_path() -> Option<String> {
+    let harvest_home = get_harvest_home();
+    let node_dir = PathBuf::from(&harvest_home).join("bin").join("nodejs");
+
+    if !node_dir.exists() {
+        return None;
+    }
+
+    // Check which Node.js version directory is in PATH
+    if let Ok(entries) = fs::read_dir(&node_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let path_str = path.to_string_lossy().to_string();
+                if is_in_path(path_str.clone()) {
+                    return Some(path_str);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "windows")]
+fn broadcast_environment_change() {
+    use std::ffi::CString;
+    use std::ptr;
+
+    // Use Windows API to broadcast WM_SETTINGCHANGE
+    #[link(name = "user32")]
+    extern "system" {
+        fn SendMessageTimeoutA(
+            hwnd: *mut std::ffi::c_void,
+            msg: u32,
+            wparam: usize,
+            lparam: *const i8,
+            flags: u32,
+            timeout: u32,
+            result: *mut usize,
+        ) -> isize;
+    }
+
+    const HWND_BROADCAST: *mut std::ffi::c_void = 0xffff as *mut std::ffi::c_void;
+    const WM_SETTINGCHANGE: u32 = 0x001A;
+    const SMTO_ABORTIFHUNG: u32 = 0x0002;
+
+    if let Ok(env) = CString::new("Environment") {
+        unsafe {
+            let mut result: usize = 0;
+            SendMessageTimeoutA(
+                HWND_BROADCAST,
+                WM_SETTINGCHANGE,
+                0,
+                env.as_ptr(),
+                SMTO_ABORTIFHUNG,
+                5000,
+                &mut result,
+            );
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn broadcast_environment_change() {
+    // No-op on non-Windows platforms
+}

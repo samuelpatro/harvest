@@ -37,6 +37,7 @@ interface PhpExtension {
 const versionGroups = ref<PhpVersionGroup[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
+const defaultPath = ref<string | null>(null)
 let unlisten: UnlistenFn | null = null
 
 // Extensions state
@@ -63,6 +64,39 @@ const filteredExtensions = computed(() => {
   if (!extensionFilter.value) return extensions.value
   return extensions.value.filter(e => e.name.toLowerCase().includes(extensionFilter.value.toLowerCase()))
 })
+
+async function loadDefaultPath() {
+  try {
+    defaultPath.value = await invoke<string | null>('get_default_php_path')
+  } catch (e) {
+    console.error('Failed to get default PHP path:', e)
+  }
+}
+
+async function setAsDefault(path: string) {
+  try {
+    // First remove any existing PHP from PATH
+    if (defaultPath.value) {
+      await invoke('remove_from_path', { path: defaultPath.value })
+    }
+    // Add the new path
+    await invoke('add_to_path', { path })
+    defaultPath.value = path
+  } catch (e) {
+    console.error('Failed to set default PHP:', e)
+    error.value = `Failed to set default PHP: ${e}`
+  }
+}
+
+async function removeFromPath(path: string) {
+  try {
+    await invoke('remove_from_path', { path })
+    defaultPath.value = null
+  } catch (e) {
+    console.error('Failed to remove from PATH:', e)
+    error.value = `Failed to remove from PATH: ${e}`
+  }
+}
 
 async function loadVersions() {
   loading.value = true
@@ -204,7 +238,7 @@ async function toggleExtension(ext: PhpExtension) {
 }
 
 onMounted(async () => {
-  await loadVersions()
+  await Promise.all([loadVersions(), loadDefaultPath()])
 
   // Listen for progress events
   unlisten = await listen<{ type: string; version: string; status: string; progress: number }>('install-progress', (event) => {
@@ -296,21 +330,45 @@ onUnmounted(() => {
                   v-for="inst in group.installed"
                   :key="inst.version"
                   class="installed-row"
-                  :class="{ 'has-update': inst.hasUpdate }"
+                  :class="{ 'has-update': inst.hasUpdate, 'is-default': defaultPath === inst.path }"
                 >
                   <span class="installed-version-name">
                     {{ inst.version }}
+                    <span v-if="defaultPath === inst.path" class="default-badge" title="In PATH">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      PATH
+                    </span>
                     <span v-if="inst.hasUpdate" class="update-badge" :title="`Update available: ${group.latestVersion}`">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 19V5M5 12l7-7 7 7" />
                       </svg>
                     </span>
                   </span>
-                  <button class="btn-uninstall" @click="uninstallVersion(inst)" title="Uninstall">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                      <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  <div class="installed-row-actions">
+                    <button
+                      v-if="defaultPath !== inst.path"
+                      class="btn-default"
+                      @click="setAsDefault(inst.path)"
+                      title="Add to PATH"
+                    >
+                      Set as Default
+                    </button>
+                    <button
+                      v-else
+                      class="btn-remove-path"
+                      @click="removeFromPath(inst.path)"
+                      title="Remove from PATH"
+                    >
+                      Remove
+                    </button>
+                    <button class="btn-uninstall" @click="uninstallVersion(inst)" title="Uninstall">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -869,6 +927,69 @@ onUnmounted(() => {
   font-size: 13px;
   font-family: var(--font-mono);
   color: var(--color-text);
+}
+
+.installed-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.installed-row.is-default {
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.default-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.default-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.btn-default {
+  padding: 4px 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-default:hover {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #22c55e;
+}
+
+.btn-remove-path {
+  padding: 4px 10px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 4px;
+  color: #ef4444;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-remove-path:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
 }
 
 .btn-uninstall {

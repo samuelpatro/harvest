@@ -2,7 +2,7 @@ pub mod commands;
 pub mod types;
 
 use commands::{
-    config::{get_config, save_config, is_first_run, get_harvest_home, initialize_harvest_home, validate_harvest_path},
+    config::{get_config, save_config, is_first_run, get_harvest_home, initialize_harvest_home, validate_harvest_path, is_in_path, add_to_path, remove_from_path, get_default_php_path, get_default_node_path},
     sites::{scan_sites, open_in_editor, open_in_terminal, open_in_browser},
     php::{
         get_available_php_versions, get_installed_php_versions,
@@ -32,6 +32,12 @@ pub fn run() {
             get_harvest_home,
             initialize_harvest_home,
             validate_harvest_path,
+            // PATH Management
+            is_in_path,
+            add_to_path,
+            remove_from_path,
+            get_default_php_path,
+            get_default_node_path,
             // Sites
             scan_sites,
             open_in_editor,
