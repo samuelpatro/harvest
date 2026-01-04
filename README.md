@@ -210,6 +210,48 @@ bun run tauri dev
 bun run tauri build
 ```
 
+## Testing
+
+### Rust Backend Tests
+
+The Rust backend includes comprehensive unit tests for core functionality:
+
+```bash
+# Run all Rust tests
+cd src-tauri && cargo test
+
+# Run tests with output
+cd src-tauri && cargo test -- --nocapture
+
+# Run specific test module
+cd src-tauri && cargo test sites::tests
+cd src-tauri && cargo test vhosts::tests
+cd src-tauri && cargo test services::tests
+cd src-tauri && cargo test node::tests
+cd src-tauri && cargo test php::tests
+cd src-tauri && cargo test types::tests
+```
+
+### Test Coverage
+
+| Module | Tests | Coverage |
+|--------|-------|----------|
+| `types/mod.rs` | 10 tests | AppConfig, Site, StackItem, InstalledVersion, etc. |
+| `commands/sites.rs` | 12 tests | Version parsing, site ID generation, domain generation |
+| `commands/vhosts.rs` | 14 tests | Nginx config generation, hosts file parsing |
+| `commands/services.rs` | 12 tests | Version extraction, service config validation |
+| `commands/node.rs` | 12 tests | Download URLs, folder parsing, version cleaning |
+| `commands/php.rs` | 9 tests | PHP version parsing, folder name extraction |
+
+### Prerequisites for Running Tests
+
+On Linux, you'll need Tauri development dependencies:
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+```
+
+On Windows, no additional dependencies are required.
+
 ---
 
 ## Design Theme

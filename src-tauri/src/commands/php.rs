@@ -149,24 +149,34 @@ fn extract_php_version(path: &PathBuf, folder_name: &str) -> Option<String> {
     let php_exe = path.join("php.exe");
     if let Ok(output) = Command::new(&php_exe).arg("-v").output() {
         if let Ok(stdout) = String::from_utf8(output.stdout) {
-            // Parse "PHP 8.4.1 (cli) ..." format
-            if let Some(line) = stdout.lines().next() {
-                if let Some(ver) = line.strip_prefix("PHP ") {
-                    if let Some(ver) = ver.split_whitespace().next() {
-                        return Some(ver.to_string());
-                    }
-                }
+            if let Some(version) = parse_php_version_output(&stdout) {
+                return Some(version);
             }
         }
     }
 
-    // Fallback: extract from folder name like "php-8.4.1-nts-Win32-vs16-x64"
+    // Fallback: extract from folder name
+    parse_php_folder_name(folder_name)
+}
+
+/// Parse PHP version from `php -v` output
+/// Format: "PHP 8.4.1 (cli) ..."
+pub fn parse_php_version_output(output: &str) -> Option<String> {
+    output.lines().next().and_then(|line| {
+        line.strip_prefix("PHP ")
+            .and_then(|rest| rest.split_whitespace().next())
+            .map(|v| v.to_string())
+    })
+}
+
+/// Parse version from PHP folder name like "php-8.4.1-nts-Win32-vs16-x64"
+pub fn parse_php_folder_name(folder_name: &str) -> Option<String> {
     let parts: Vec<&str> = folder_name.split('-').collect();
     if parts.len() >= 2 && parts[0] == "php" {
-        return Some(parts[1].to_string());
+        Some(parts[1].to_string())
+    } else {
+        None
     }
-
-    None
 }
 
 #[tauri::command]
@@ -488,4 +498,106 @@ pub fn toggle_php_extension(php_path: String, extension: String, enable: bool) -
         .map_err(|e| format!("Failed to write php.ini: {}", e))?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_php_version_output_standard() {
+        let output = "PHP 8.4.1 (cli) (built: Dec 18 2024 12:00:00) (NTS Visual C++ 2019 x64)
+Copyright (c) The PHP Group
+Zend Engine v4.4.1, Copyright (c) Zend Technologies";
+        let version = parse_php_version_output(output);
+        assert_eq!(version, Some("8.4.1".to_string()));
+    }
+
+    #[test]
+    fn test_parse_php_version_output_simple() {
+        let output = "PHP 8.3.0 (cli)";
+        let version = parse_php_version_output(output);
+        assert_eq!(version, Some("8.3.0".to_string()));
+    }
+
+    #[test]
+    fn test_parse_php_version_output_empty() {
+        let output = "";
+        let version = parse_php_version_output(output);
+        assert!(version.is_none());
+    }
+
+    #[test]
+    fn test_parse_php_version_output_invalid() {
+        let output = "Not PHP output";
+        let version = parse_php_version_output(output);
+        assert!(version.is_none());
+    }
+
+    #[test]
+    fn test_parse_php_folder_name_standard() {
+        let version = parse_php_folder_name("php-8.4.1-nts-Win32-vs16-x64");
+        assert_eq!(version, Some("8.4.1".to_string()));
+    }
+
+    #[test]
+    fn test_parse_php_folder_name_simple() {
+        let version = parse_php_folder_name("php-8.3");
+        assert_eq!(version, Some("8.3".to_string()));
+    }
+
+    #[test]
+    fn test_parse_php_folder_name_invalid() {
+        let version = parse_php_folder_name("not-a-php-folder");
+        assert!(version.is_none());
+    }
+
+    #[test]
+    fn test_parse_php_folder_name_short() {
+        let version = parse_php_folder_name("php");
+        assert!(version.is_none());
+    }
+
+    #[test]
+    fn test_installed_version_struct() {
+        let v = InstalledVersion {
+            version: "8.3.1".to_string(),
+            path: "C:/laragon/bin/php/php-8.3.1".to_string(),
+        };
+        assert_eq!(v.version, "8.3.1");
+    }
+
+    #[test]
+    fn test_available_version_struct() {
+        let v = AvailableVersion {
+            version: "8.4".to_string(),
+            full_version: "8.4.1".to_string(),
+            lts: true,
+            download_url: "https://windows.php.net/downloads/releases/php-8.4.1-nts-Win32-vs17-x64.zip".to_string(),
+        };
+        assert!(v.lts);
+        assert_eq!(v.version, "8.4");
+    }
+
+    #[test]
+    fn test_php_extension_struct() {
+        let ext = PhpExtension {
+            name: "curl".to_string(),
+            enabled: true,
+            builtin: false,
+        };
+        assert_eq!(ext.name, "curl");
+        assert!(ext.enabled);
+        assert!(!ext.builtin);
+    }
+
+    #[test]
+    fn test_php_extension_builtin() {
+        let ext = PhpExtension {
+            name: "standard".to_string(),
+            enabled: true,
+            builtin: true,
+        };
+        assert!(ext.builtin);
+    }
 }
