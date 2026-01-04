@@ -1,10 +1,12 @@
 export interface ServiceInfo {
   id: string
   name: string
-  status: 'running' | 'stopped' | 'error'
+  status: 'running' | 'stopped' | 'not_installed'
   port: number
   pid?: number
-  icon: string
+  path?: string
+  description: string
+  version?: string
 }
 
 export interface StackItem {
@@ -30,8 +32,24 @@ export interface PhpVersion {
 }
 
 export interface AppConfig {
-  sitesDirectory: string
-  defaultPhp: string
-  editorCommand: string
-  autoStart: boolean
+  harvest_home: string
+  harvest_paths: string[]
+  editor_command: string
+  terminal_command: string
+  first_run_complete: boolean
+}
+
+export interface ServiceVersion {
+  version: string
+  download_url: string
+  filename: string
+}
+
+export interface InstallableService {
+  id: string
+  name: string
+  description: string
+  installed: boolean
+  version?: string
+  available_versions: ServiceVersion[]
 }

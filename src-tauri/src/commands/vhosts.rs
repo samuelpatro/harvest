@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use crate::commands::config::get_harvest_home;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VhostConfig {
@@ -20,43 +21,40 @@ pub struct VhostStatus {
     pub is_linked: bool,
 }
 
-// Platform-specific paths
-#[cfg(target_os = "windows")]
-mod paths {
-    pub const HARVEST_HOME: &str = "C:/harvest";
-    pub const NGINX_SITES_PATH: &str = "C:/harvest/etc/nginx/sites-enabled";
-    pub const HOSTS_FILE_PATH: &str = "C:/Windows/System32/drivers/etc/hosts";
-    pub const SSL_CERT_PATH: &str = "C:/harvest/etc/ssl/harvest.crt";
-    pub const SSL_KEY_PATH: &str = "C:/harvest/etc/ssl/harvest.key";
-    pub const NGINX_EXE: &str = "C:/harvest/bin/nginx/nginx.exe";
-    pub const NGINX_CONF: &str = "C:/harvest/etc/nginx/nginx.conf";
+/// Dynamic path resolver based on harvest_home configuration
+struct HarvestPaths {
+    nginx_sites_path: String,
+    ssl_cert_path: String,
+    ssl_key_path: String,
+    nginx_exe: String,
+    nginx_conf: String,
 }
 
-#[cfg(target_os = "macos")]
-mod paths {
-    pub const HARVEST_HOME: &str = "/usr/local/harvest";
-    pub const NGINX_SITES_PATH: &str = "/usr/local/harvest/etc/nginx/sites-enabled";
-    pub const HOSTS_FILE_PATH: &str = "/etc/hosts";
-    pub const SSL_CERT_PATH: &str = "/usr/local/harvest/etc/ssl/harvest.crt";
-    pub const SSL_KEY_PATH: &str = "/usr/local/harvest/etc/ssl/harvest.key";
-    pub const NGINX_EXE: &str = "/usr/local/harvest/bin/nginx/nginx";
-    pub const NGINX_CONF: &str = "/usr/local/harvest/etc/nginx/nginx.conf";
+impl HarvestPaths {
+    fn new(harvest_home: &str) -> Self {
+        #[cfg(target_os = "windows")]
+        let nginx_exe_name = "nginx.exe";
+        #[cfg(not(target_os = "windows"))]
+        let nginx_exe_name = "nginx";
+
+        Self {
+            nginx_sites_path: format!("{}/etc/nginx/sites-enabled", harvest_home),
+            ssl_cert_path: format!("{}/etc/ssl/harvest.crt", harvest_home),
+            ssl_key_path: format!("{}/etc/ssl/harvest.key", harvest_home),
+            nginx_exe: format!("{}/bin/nginx/{}", harvest_home, nginx_exe_name),
+            nginx_conf: format!("{}/etc/nginx/nginx.conf", harvest_home),
+        }
+    }
 }
 
-#[cfg(target_os = "linux")]
-mod paths {
-    pub const HARVEST_HOME: &str = "/opt/harvest";
-    pub const NGINX_SITES_PATH: &str = "/opt/harvest/etc/nginx/sites-enabled";
-    pub const HOSTS_FILE_PATH: &str = "/etc/hosts";
-    pub const SSL_CERT_PATH: &str = "/opt/harvest/etc/ssl/harvest.crt";
-    pub const SSL_KEY_PATH: &str = "/opt/harvest/etc/ssl/harvest.key";
-    pub const NGINX_EXE: &str = "/opt/harvest/bin/nginx/nginx";
-    pub const NGINX_CONF: &str = "/opt/harvest/etc/nginx/nginx.conf";
+fn get_hosts_file_path() -> &'static str {
+    #[cfg(target_os = "windows")]
+    { "C:/Windows/System32/drivers/etc/hosts" }
+    #[cfg(not(target_os = "windows"))]
+    { "/etc/hosts" }
 }
 
-use paths::*;
-
-fn generate_nginx_config(config: &VhostConfig) -> String {
+fn generate_nginx_config(config: &VhostConfig, paths: &HarvestPaths) -> String {
     let root = config.root_path.replace('\\', "/");
 
     // Determine document root - check for public folder
@@ -104,21 +102,22 @@ fn generate_nginx_config(config: &VhostConfig) -> String {
 "#,
         domain = config.domain,
         document_root = document_root,
-        ssl_cert = SSL_CERT_PATH,
-        ssl_key = SSL_KEY_PATH,
+        ssl_cert = paths.ssl_cert_path,
+        ssl_key = paths.ssl_key_path,
     )
 }
 
-fn get_nginx_config_path(site_name: &str) -> PathBuf {
-    PathBuf::from(NGINX_SITES_PATH).join(format!("auto.{}.test.conf", site_name))
+fn get_nginx_config_path(site_name: &str, paths: &HarvestPaths) -> PathBuf {
+    PathBuf::from(&paths.nginx_sites_path).join(format!("auto.{}.test.conf", site_name))
 }
 
-fn nginx_config_exists(site_name: &str) -> bool {
-    get_nginx_config_path(site_name).exists()
+fn nginx_config_exists(site_name: &str, paths: &HarvestPaths) -> bool {
+    get_nginx_config_path(site_name, paths).exists()
 }
 
 fn hosts_entry_exists(domain: &str) -> bool {
-    if let Ok(content) = fs::read_to_string(HOSTS_FILE_PATH) {
+    let hosts_path = get_hosts_file_path();
+    if let Ok(content) = fs::read_to_string(hosts_path) {
         content.lines().any(|line| {
             let line = line.trim();
             !line.starts_with('#') && line.contains(domain)
@@ -130,8 +129,10 @@ fn hosts_entry_exists(domain: &str) -> bool {
 
 #[tauri::command]
 pub fn get_vhost_status(site_name: String) -> VhostStatus {
+    let harvest_home = get_harvest_home();
+    let paths = HarvestPaths::new(&harvest_home);
     let domain = format!("{}.test", site_name);
-    let nginx_exists = nginx_config_exists(&site_name);
+    let nginx_exists = nginx_config_exists(&site_name, &paths);
     let hosts_exists = hosts_entry_exists(&domain);
 
     VhostStatus {
@@ -150,6 +151,8 @@ pub fn get_all_vhost_statuses(site_names: Vec<String>) -> Vec<VhostStatus> {
 
 #[tauri::command]
 pub async fn link_site(site_name: String, root_path: String) -> Result<String, String> {
+    let harvest_home = get_harvest_home();
+    let paths = HarvestPaths::new(&harvest_home);
     let domain = format!("{}.test", site_name);
 
     let config = VhostConfig {
@@ -161,8 +164,8 @@ pub async fn link_site(site_name: String, root_path: String) -> Result<String, S
     };
 
     // Step 1: Create nginx config
-    let nginx_config = generate_nginx_config(&config);
-    let nginx_path = get_nginx_config_path(&site_name);
+    let nginx_config = generate_nginx_config(&config, &paths);
+    let nginx_path = get_nginx_config_path(&site_name, &paths);
 
     fs::write(&nginx_path, &nginx_config)
         .map_err(|e| format!("Failed to write nginx config: {}", e))?;
@@ -173,17 +176,19 @@ pub async fn link_site(site_name: String, root_path: String) -> Result<String, S
     }
 
     // Step 3: Reload nginx
-    reload_nginx()?;
+    reload_nginx(&paths)?;
 
     Ok(format!("Site {} linked successfully at https://{}", site_name, domain))
 }
 
 #[tauri::command]
 pub async fn unlink_site(site_name: String) -> Result<String, String> {
+    let harvest_home = get_harvest_home();
+    let paths = HarvestPaths::new(&harvest_home);
     let domain = format!("{}.test", site_name);
 
     // Step 1: Remove nginx config
-    let nginx_path = get_nginx_config_path(&site_name);
+    let nginx_path = get_nginx_config_path(&site_name, &paths);
     if nginx_path.exists() {
         fs::remove_file(&nginx_path)
             .map_err(|e| format!("Failed to remove nginx config: {}", e))?;
@@ -195,12 +200,13 @@ pub async fn unlink_site(site_name: String) -> Result<String, String> {
     }
 
     // Step 3: Reload nginx
-    reload_nginx()?;
+    reload_nginx(&paths)?;
 
     Ok(format!("Site {} unlinked successfully", site_name))
 }
 
 fn add_hosts_entry(domain: &str) -> Result<(), String> {
+    let hosts_path = get_hosts_file_path();
     let entry = format!("127.0.0.1 {}", domain);
 
     #[cfg(target_os = "windows")]
@@ -208,7 +214,7 @@ fn add_hosts_entry(domain: &str) -> Result<(), String> {
         // Use PowerShell with elevation to add entry (hidden window)
         let script = format!(
             r#"Add-Content -Path '{}' -Value "`n{}" -Force"#,
-            HOSTS_FILE_PATH, entry
+            hosts_path, entry
         );
 
         let output = Command::new("powershell")
@@ -237,7 +243,7 @@ fn add_hosts_entry(domain: &str) -> Result<(), String> {
     {
         // Use sudo on macOS/Linux
         let output = Command::new("sudo")
-            .args(["sh", "-c", &format!("echo '{}' >> {}", entry, HOSTS_FILE_PATH)])
+            .args(["sh", "-c", &format!("echo '{}' >> {}", entry, hosts_path)])
             .output()
             .map_err(|e| format!("Failed to run sudo: {}", e))?;
 
@@ -250,8 +256,10 @@ fn add_hosts_entry(domain: &str) -> Result<(), String> {
 }
 
 fn remove_hosts_entry(domain: &str) -> Result<(), String> {
+    let hosts_path = get_hosts_file_path();
+
     // Read current hosts file
-    let content = fs::read_to_string(HOSTS_FILE_PATH)
+    let content = fs::read_to_string(hosts_path)
         .map_err(|e| format!("Failed to read hosts file: {}", e))?;
 
     // Filter out the domain line
@@ -276,7 +284,7 @@ fn remove_hosts_entry(domain: &str) -> Result<(), String> {
         let script = format!(
             r#"Copy-Item -Path '{}' -Destination '{}' -Force"#,
             temp_path.to_string_lossy().replace('\\', "/"),
-            HOSTS_FILE_PATH
+            hosts_path
         );
 
         let output = Command::new("powershell")
@@ -302,7 +310,7 @@ fn remove_hosts_entry(domain: &str) -> Result<(), String> {
         // Use sudo on macOS/Linux
         let escaped_content = new_content.replace("'", "'\\''");
         let output = Command::new("sudo")
-            .args(["sh", "-c", &format!("echo '{}' > {}", escaped_content, HOSTS_FILE_PATH)])
+            .args(["sh", "-c", &format!("echo '{}' > {}", escaped_content, hosts_path)])
             .output()
             .map_err(|e| format!("Failed to run sudo: {}", e))?;
 
@@ -314,14 +322,14 @@ fn remove_hosts_entry(domain: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn reload_nginx() -> Result<(), String> {
-    let nginx_exe = PathBuf::from(NGINX_EXE);
+fn reload_nginx(paths: &HarvestPaths) -> Result<(), String> {
+    let nginx_exe = PathBuf::from(&paths.nginx_exe);
     if !nginx_exe.exists() {
         return Err("Nginx executable not found".to_string());
     }
 
     let output = Command::new(&nginx_exe)
-        .args(["-c", NGINX_CONF, "-s", "reload"])
+        .args(["-c", &paths.nginx_conf, "-s", "reload"])
         .output()
         .map_err(|e| format!("Failed to reload nginx: {}", e))?;
 
@@ -338,13 +346,16 @@ fn reload_nginx() -> Result<(), String> {
 
 #[tauri::command]
 pub fn check_nginx_config() -> Result<String, String> {
-    let nginx_exe = PathBuf::from(NGINX_EXE);
+    let harvest_home = get_harvest_home();
+    let paths = HarvestPaths::new(&harvest_home);
+
+    let nginx_exe = PathBuf::from(&paths.nginx_exe);
     if !nginx_exe.exists() {
         return Err("Nginx executable not found".to_string());
     }
 
     let output = Command::new(&nginx_exe)
-        .args(["-c", NGINX_CONF, "-t"])
+        .args(["-c", &paths.nginx_conf, "-t"])
         .output()
         .map_err(|e| format!("Failed to test nginx config: {}", e))?;
 

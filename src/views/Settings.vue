@@ -5,17 +5,19 @@ import { open } from '@tauri-apps/plugin-dialog'
 import PageHeader from '../components/PageHeader.vue'
 
 interface AppConfig {
+  harvest_home: string
   harvest_paths: string[]
   editor_command: string
   terminal_command: string
-  default_php: string
+  first_run_complete: boolean
 }
 
 const config = ref<AppConfig>({
-  harvest_paths: ['C:/laragon/www'],
+  harvest_home: 'C:/harvest',
+  harvest_paths: [],
   editor_command: 'code',
   terminal_command: 'wt -d',
-  default_php: '8.4'
+  first_run_complete: true
 })
 
 const saving = ref(false)
@@ -72,14 +74,35 @@ onMounted(() => {
 
     <div class="page-content">
       <div class="settings-sections">
-        <!-- Harvest Paths -->
+        <!-- Harvest Home -->
+        <section class="settings-section">
+          <div class="section-header">
+            <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+            <div>
+              <h2 class="section-title">Harvest Home</h2>
+              <p class="section-desc">Where Harvest stores services and configuration</p>
+            </div>
+          </div>
+          <div class="path-item readonly">
+            <span class="path-text">{{ config.harvest_home }}</span>
+            <span class="path-badge">Read-only</span>
+          </div>
+          <div class="input-hint">
+            Change this by running setup wizard again or editing the config file directly.
+          </div>
+        </section>
+
+        <!-- Sites Paths -->
         <section class="settings-section">
           <div class="section-header">
             <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
             </svg>
             <div>
-              <h2 class="section-title">Harvest Paths</h2>
+              <h2 class="section-title">Sites Directories</h2>
               <p class="section-desc">Directories where your local sites are stored</p>
             </div>
           </div>
@@ -164,26 +187,6 @@ onMounted(() => {
           </div>
         </section>
 
-        <!-- Default PHP -->
-        <section class="settings-section">
-          <div class="section-header">
-            <svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <ellipse cx="12" cy="12" rx="10" ry="7" />
-            </svg>
-            <div>
-              <h2 class="section-title">Default PHP Version</h2>
-              <p class="section-desc">PHP version to use when not specified</p>
-            </div>
-          </div>
-          <div class="input-group">
-            <select class="select-input" v-model="config.default_php" @change="saveConfig">
-              <option value="8.4">PHP 8.4</option>
-              <option value="8.3">PHP 8.3</option>
-              <option value="8.2">PHP 8.2</option>
-              <option value="8.1">PHP 8.1</option>
-            </select>
-          </div>
-        </section>
       </div>
     </div>
 
@@ -279,6 +282,19 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.path-item.readonly {
+  background: var(--color-bg-elevated);
+  border-style: dashed;
+}
+
+.path-badge {
+  font-size: 11px;
+  padding: 4px 8px;
+  background: var(--color-bg);
+  border-radius: 4px;
+  color: var(--color-text-muted);
 }
 
 .btn-remove {

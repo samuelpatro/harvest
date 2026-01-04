@@ -5,6 +5,7 @@ use std::process::Command;
 use futures_util::StreamExt;
 use tauri::{AppHandle, Emitter};
 use crate::types::{AvailableVersion, InstalledVersion, PhpExtension};
+use crate::commands::config::get_harvest_home;
 
 #[tauri::command]
 pub async fn get_available_php_versions() -> Result<Vec<AvailableVersion>, String> {
@@ -104,34 +105,34 @@ pub async fn get_available_php_versions() -> Result<Vec<AvailableVersion>, Strin
 #[tauri::command]
 pub fn get_installed_php_versions() -> Vec<InstalledVersion> {
     let mut versions = Vec::new();
+    let harvest_home = get_harvest_home();
 
-    // Check common Laragon PHP paths
-    let php_dirs = vec![
-        PathBuf::from("C:/laragon/bin/php"),
-        PathBuf::from("C:/php"),
-    ];
+    // Check PHP directory in harvest home
+    let php_dir = PathBuf::from(&harvest_home).join("bin").join("php");
 
-    for php_dir in php_dirs {
-        if php_dir.exists() && php_dir.is_dir() {
-            if let Ok(entries) = fs::read_dir(&php_dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        let name = path.file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("");
+    if php_dir.exists() && php_dir.is_dir() {
+        if let Ok(entries) = fs::read_dir(&php_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let name = path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("");
 
-                        // Check if it's a PHP directory (contains php.exe)
-                        let php_exe = path.join("php.exe");
-                        if php_exe.exists() {
-                            // Try to extract version from folder name or run php -v
-                            let version = extract_php_version(&path, name);
-                            if let Some(ver) = version {
-                                versions.push(InstalledVersion {
-                                    version: ver,
-                                    path: path.to_string_lossy().to_string(),
-                                });
-                            }
+                    // Check if it's a PHP directory (contains php.exe or php)
+                    #[cfg(target_os = "windows")]
+                    let php_exe = path.join("php.exe");
+                    #[cfg(not(target_os = "windows"))]
+                    let php_exe = path.join("php");
+
+                    if php_exe.exists() {
+                        // Try to extract version from folder name or run php -v
+                        let version = extract_php_version(&path, name);
+                        if let Some(ver) = version {
+                            versions.push(InstalledVersion {
+                                version: ver,
+                                path: path.to_string_lossy().to_string(),
+                            });
                         }
                     }
                 }
@@ -171,7 +172,8 @@ fn extract_php_version(path: &PathBuf, folder_name: &str) -> Option<String> {
 
 #[tauri::command]
 pub async fn install_php_version(app: AppHandle, version: String) -> Result<(), String> {
-    let install_dir = PathBuf::from("C:/laragon/bin/php");
+    let harvest_home = get_harvest_home();
+    let install_dir = PathBuf::from(&harvest_home).join("bin").join("php");
     fs::create_dir_all(&install_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
 
     // Emit progress event
@@ -335,7 +337,8 @@ pub async fn install_php_version(app: AppHandle, version: String) -> Result<(), 
 
 #[tauri::command]
 pub async fn uninstall_php_version(version: String) -> Result<(), String> {
-    let php_dir = PathBuf::from("C:/laragon/bin/php");
+    let harvest_home = get_harvest_home();
+    let php_dir = PathBuf::from(&harvest_home).join("bin").join("php");
 
     // Find the directory matching this version
     if let Ok(entries) = fs::read_dir(&php_dir) {
