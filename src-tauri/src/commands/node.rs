@@ -154,7 +154,8 @@ fn extract_node_version(path: &PathBuf, folder_name: &str) -> Option<String> {
     None
 }
 
-fn get_node_download_url(version: &str) -> Option<String> {
+/// Get the download URL for a Node.js version
+pub fn get_node_download_url(version: &str) -> Option<String> {
     // Node.js download URLs from nodejs.org
     let full_version = match version {
         "23" => "23.5.0",
@@ -352,5 +353,20 @@ fn check_package_manager_version(command: &str) -> (bool, Option<String>) {
             (true, Some(clean_version))
         }
         _ => (false, None)
+    }
+}
+
+/// Clean a version string by removing 'v' prefix
+pub fn clean_version_string(version: &str) -> String {
+    version.trim().trim_start_matches('v').to_string()
+}
+
+/// Parse a Node.js folder name to extract version
+pub fn parse_node_folder_name(folder_name: &str) -> Option<String> {
+    let parts: Vec<&str> = folder_name.split('-').collect();
+    if parts.len() >= 2 && parts[0] == "node" {
+        Some(parts[1].trim_start_matches('v').to_string())
+    } else {
+        None
     }
 }
