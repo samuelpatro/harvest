@@ -91,7 +91,7 @@ fn find_executable(config: &ServiceConfig) -> Option<PathBuf> {
             return Some(bin_path);
         }
 
-        // For Laragon, check versioned subdirectories
+        // Check versioned subdirectories (e.g., mysql-8.0.33/, redis-7.2.4/)
         if base.exists() && base.is_dir() {
             if let Ok(entries) = std::fs::read_dir(&base) {
                 for entry in entries.flatten() {

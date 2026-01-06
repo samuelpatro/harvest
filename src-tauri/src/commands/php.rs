@@ -2,13 +2,74 @@ use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 use futures_util::StreamExt;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 use crate::types::{AvailableVersion, InstalledVersion, PhpExtension};
 use crate::commands::config::get_harvest_home;
 
+#[derive(Serialize, Deserialize)]
+struct VersionCache {
+    timestamp: u64,
+    versions: Vec<AvailableVersion>,
+}
+
+const CACHE_TTL_SECONDS: u64 = 24 * 60 * 60; // 24 hours
+
+fn get_php_cache_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("harvest")
+        .join("php_versions_cache.json")
+}
+
+fn get_current_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+fn read_php_cache() -> Option<Vec<AvailableVersion>> {
+    let cache_path = get_php_cache_path();
+    if !cache_path.exists() {
+        return None;
+    }
+
+    let content = fs::read_to_string(&cache_path).ok()?;
+    let cache: VersionCache = serde_json::from_str(&content).ok()?;
+
+    // Check if cache is still valid
+    let now = get_current_timestamp();
+    if now - cache.timestamp < CACHE_TTL_SECONDS {
+        Some(cache.versions)
+    } else {
+        None
+    }
+}
+
+fn write_php_cache(versions: &[AvailableVersion]) {
+    let cache = VersionCache {
+        timestamp: get_current_timestamp(),
+        versions: versions.to_vec(),
+    };
+
+    if let Ok(content) = serde_json::to_string_pretty(&cache) {
+        let cache_path = get_php_cache_path();
+        fs::write(&cache_path, content).ok();
+    }
+}
+
 #[tauri::command]
-pub async fn get_available_php_versions() -> Result<Vec<AvailableVersion>, String> {
+pub async fn get_available_php_versions(force_refresh: Option<bool>) -> Result<Vec<AvailableVersion>, String> {
+    // Check cache first unless force refresh
+    if !force_refresh.unwrap_or(false) {
+        if let Some(cached) = read_php_cache() {
+            return Ok(cached);
+        }
+    }
+
     let client = reqwest::Client::new();
 
     // Fetch active/supported versions from php.net
@@ -98,6 +159,9 @@ pub async fn get_available_php_versions() -> Result<Vec<AvailableVersion>, Strin
         let b_parts: Vec<u32> = b.version.split('.').filter_map(|s| s.parse().ok()).collect();
         b_parts.cmp(&a_parts)
     });
+
+    // Write to cache
+    write_php_cache(&versions);
 
     Ok(versions)
 }

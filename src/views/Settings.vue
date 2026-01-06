@@ -3,6 +3,9 @@ import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import PageHeader from '../components/PageHeader.vue'
+import { useSitesStore } from '../stores/sites'
+
+const sitesStore = useSitesStore()
 
 interface AppConfig {
   harvest_home: string
@@ -53,13 +56,17 @@ async function addHarvestPath() {
   if (selected && !config.value.harvest_paths.includes(selected as string)) {
     config.value.harvest_paths.push(selected as string)
     await saveConfig()
+    // Refresh sites to pick up the new path
+    await sitesStore.fetchSites()
   }
 }
 
-function removeHarvestPath(index: number) {
+async function removeHarvestPath(index: number) {
   if (config.value.harvest_paths.length > 1) {
     config.value.harvest_paths.splice(index, 1)
-    saveConfig()
+    await saveConfig()
+    // Refresh sites to reflect removed path
+    await sitesStore.fetchSites()
   }
 }
 

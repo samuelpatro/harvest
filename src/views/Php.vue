@@ -36,6 +36,7 @@ interface PhpExtension {
 
 const versionGroups = ref<PhpVersionGroup[]>([])
 const loading = ref(true)
+const refreshing = ref(false)
 const error = ref<string | null>(null)
 const defaultPath = ref<string | null>(null)
 let unlisten: UnlistenFn | null = null
@@ -98,14 +99,18 @@ async function removeFromPath(path: string) {
   }
 }
 
-async function loadVersions() {
-  loading.value = true
+async function loadVersions(forceRefresh = false) {
+  if (forceRefresh) {
+    refreshing.value = true
+  } else {
+    loading.value = true
+  }
   error.value = null
   try {
     // Fetch both installed and available versions in parallel
     const [installed, available] = await Promise.all([
       invoke<{ version: string; path: string }[]>('get_installed_php_versions'),
-      invoke<AvailableVersion[]>('get_available_php_versions')
+      invoke<AvailableVersion[]>('get_available_php_versions', { forceRefresh })
     ])
 
     // Build version groups
@@ -161,6 +166,7 @@ async function loadVersions() {
     versionGroups.value = []
   } finally {
     loading.value = false
+    refreshing.value = false
   }
 }
 
@@ -264,7 +270,15 @@ onUnmounted(() => {
 
 <template>
   <div class="page-layout">
-    <PageHeader title="PHP" :subtitle="`${installedCount} installed${updatesAvailable > 0 ? ` · ${updatesAvailable} update${updatesAvailable > 1 ? 's' : ''} available` : ''}`" />
+    <PageHeader title="PHP" :subtitle="`${installedCount} installed${updatesAvailable > 0 ? ` · ${updatesAvailable} update${updatesAvailable > 1 ? 's' : ''} available` : ''}`">
+      <button class="btn-refresh" :disabled="refreshing" @click="loadVersions(true)" title="Refresh versions">
+        <svg :class="{ spinning: refreshing }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 4 23 10 17 10" />
+          <polyline points="1 20 1 14 7 14" />
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+        </svg>
+      </button>
+    </PageHeader>
 
     <div class="page-content">
       <!-- Versions Section -->
@@ -463,6 +477,43 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 24px 32px 32px 32px;
+}
+
+.btn-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-refresh:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-refresh svg {
+  width: 18px;
+  height: 18px;
+}
+
+.btn-refresh svg.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .page-content > .content-section {

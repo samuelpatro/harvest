@@ -53,10 +53,8 @@ export const useSitesStore = defineStore('sites', {
       this.loading = true
       this.error = null
       try {
-        // Get config first
-        if (!this.config) {
-          await this.fetchConfig()
-        }
+        // Always fetch fresh config to pick up any changes
+        await this.fetchConfig()
 
         if (!this.config?.harvest_paths?.length) {
           this.error = 'No harvest paths configured'
@@ -167,6 +165,13 @@ export const useSitesStore = defineStore('sites', {
 
     isLinking(siteName: string): boolean {
       return this.linkingInProgress[siteName] ?? false
+    },
+
+    async refreshAfterConfigChange() {
+      // Clear cached config so fetchSites will reload it
+      this.config = null
+      await this.fetchSites()
+      await this.fetchVhostStatuses()
     }
   },
 })

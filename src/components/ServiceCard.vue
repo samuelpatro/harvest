@@ -32,7 +32,7 @@ function getStatusClass(status: string): string {
 function formatPath(path: string | null): string {
   if (!path) return ''
   // Shorten the path for display
-  return path.replace(/\\/g, '/').replace(/^C:\/laragon\/bin\//, '')
+  return path.replace(/\\/g, '/').replace(/^C:\/harvest\/bin\//, '')
 }
 </script>
 

@@ -30,6 +30,7 @@ A native desktop application for managing local PHP/Node.js development environm
 - [x] Grouped version display (multiple versions per major.minor)
 - [x] Update detection (show when newer version available)
 - [x] PHP extensions management (enable/disable via php.ini)
+- [x] Version caching (24h TTL) with manual refresh button
 - [ ] Per-site PHP version switching
 - [x] Add PHP to Windows PATH
 
@@ -41,6 +42,7 @@ A native desktop application for managing local PHP/Node.js development environm
 - [x] Update detection
 - [x] Package managers detection (npm, yarn, pnpm, bun)
 - [x] Grouped version display (like PHP)
+- [x] Version caching (24h TTL) with manual refresh button
 - [x] Add Node to Windows PATH
 
 ### Site Management
@@ -86,8 +88,8 @@ A native desktop application for managing local PHP/Node.js development environm
 - [x] `C:\harvest\bin\` - Service binaries (nginx, mysql, redis, php)
 - [x] `C:\harvest\etc\` - Config files (nginx.conf, vhosts, ssl)
 - [x] `C:\harvest\logs\` - Service logs
-- [ ] Configurable harvest home path
-- [ ] First-run setup wizard
+- [x] Configurable harvest home path
+- [x] First-run setup wizard
 
 ---
 
@@ -99,8 +101,9 @@ harvest/
 │   ├── components/
 │   │   ├── PageHeader.vue        # Page title + subtitle
 │   │   ├── PhpSelector.vue       # Global PHP version selector
-│   │   ├── Sidebar.vue           # Navigation sidebar
 │   │   ├── ServiceCard.vue       # Service status card
+│   │   ├── SetupWizard.vue       # First-run setup wizard
+│   │   ├── Sidebar.vue           # Navigation sidebar
 │   │   └── SiteCard.vue          # Site display card
 │   ├── views/
 │   │   ├── Dashboard.vue         # Overview page
@@ -175,7 +178,7 @@ open_in_browser(url: String) -> Result<(), String>
 
 ### PHP (`commands/php.rs`)
 ```rust
-get_available_php_versions() -> Result<Vec<AvailableVersion>, String>
+get_available_php_versions(force_refresh: Option<bool>) -> Result<Vec<AvailableVersion>, String>
 get_installed_php_versions() -> Vec<InstalledVersion>
 install_php_version(app: AppHandle, version: String) -> Result<(), String>
 uninstall_php_version(version: String) -> Result<(), String>
@@ -185,7 +188,7 @@ toggle_php_extension(php_path: String, extension: String, enable: bool) -> Resul
 
 ### Node.js (`commands/node.rs`)
 ```rust
-get_available_node_versions() -> Result<Vec<AvailableVersion>, String>
+get_available_node_versions(force_refresh: Option<bool>) -> Result<Vec<AvailableVersion>, String>
 get_installed_node_versions() -> Vec<InstalledVersion>
 install_node_version(app: AppHandle, version: String) -> Result<(), String>
 uninstall_node_version(version: String) -> Result<(), String>
@@ -198,6 +201,9 @@ get_services() -> Vec<ServiceInfo>
 start_service(id: String) -> Result<(), String>
 stop_service(id: String) -> Result<(), String>
 restart_service(id: String) -> Result<(), String>
+get_installable_services() -> Vec<InstallableService>
+install_service(app: AppHandle, service_id: String, version: String) -> Result<(), String>
+uninstall_service(service_id: String, version: String) -> Result<(), String>
 ```
 
 ### Vhosts (`commands/vhosts.rs`)
@@ -252,14 +258,14 @@ cd src-tauri && cargo test --test config_tests
 ```
 src-tauri/
 ├── src/           # Source code (no inline tests)
-└── tests/         # Integration tests
+└── tests/         # Integration tests (112 total)
     ├── types_tests.rs      # 23 tests - AppConfig, Site, StackItem, InstallableService, etc.
     ├── sites_tests.rs      # 16 tests - Version parsing, site ID generation
-    ├── vhosts_tests.rs     # 16 tests - Nginx config, hosts file parsing
+    ├── vhosts_tests.rs     # 15 tests - Nginx config, hosts file parsing
     ├── services_tests.rs   # 9 tests - Version extraction from CLI output
     ├── node_tests.rs       # 13 tests - Download URLs, folder parsing
     ├── php_tests.rs        # 12 tests - PHP version parsing
-    └── config_tests.rs     # 27 tests - PATH normalization and manipulation
+    └── config_tests.rs     # 24 tests - PATH normalization and manipulation
 ```
 
 ### Prerequisites for Running Tests
@@ -326,7 +332,7 @@ On Windows, no additional dependencies are required.
   - [x] Redis (from GitHub releases)
   - [x] PHP versions (already implemented)
 - [x] Service install/uninstall UI (like PHP versions page)
-- [x] No Laragon dependency - completely standalone
+- [x] Completely standalone - no external dependencies
 
 ### Phase 5 - Dashboard & Polish
 - [ ] Quick stats overview (sites count, services status)

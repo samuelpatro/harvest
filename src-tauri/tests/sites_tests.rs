@@ -72,8 +72,9 @@ fn test_generate_site_id_unix_path() {
 
 #[test]
 fn test_generate_site_id_windows_path() {
-    let id = generate_site_id("mysite", "C:\\laragon\\www\\mysite");
-    assert_eq!(id, "mysite-C-laragon-www-mysite");
+    let id = generate_site_id("mysite", "C:\\harvest\\www\\mysite");
+    // C:\ becomes C-- (colon->dash, backslash->dash)
+    assert_eq!(id, "mysite-C--harvest-www-mysite");
 }
 
 #[test]

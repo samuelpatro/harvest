@@ -59,7 +59,7 @@ fn test_parse_php_folder_name_short() {
 fn test_installed_version_struct() {
     let v = InstalledVersion {
         version: "8.3.1".to_string(),
-        path: "C:/laragon/bin/php/php-8.3.1".to_string(),
+        path: "C:/harvest/bin/php/php-8.3.1".to_string(),
     };
     assert_eq!(v.version, "8.3.1");
 }

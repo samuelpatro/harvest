@@ -320,7 +320,6 @@ pub fn get_default_node_path() -> Option<String> {
 #[cfg(target_os = "windows")]
 fn broadcast_environment_change() {
     use std::ffi::CString;
-    use std::ptr;
 
     // Use Windows API to broadcast WM_SETTINGCHANGE
     #[link(name = "user32")]

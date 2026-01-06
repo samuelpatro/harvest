@@ -10,7 +10,7 @@ interface InstalledVersion {
 export const useConfigStore = defineStore('config', {
   state: () => ({
     config: {
-      harvest_paths: ['C:/laragon/www'],
+      harvest_paths: [],
       editor_command: 'code',
       terminal_command: 'wt -d',
     } as AppConfig,

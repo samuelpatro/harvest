@@ -71,6 +71,15 @@ src-tauri/
 ### Config Commands (`commands/config.rs`)
 - `get_config()` → `AppConfig`
 - `save_config(config)` → `Result<(), String>`
+- `is_first_run()` → `bool`
+- `get_harvest_home()` → `String`
+- `initialize_harvest_home(path)` → `Result<(), String>`
+- `validate_harvest_path(path)` → `Result<bool, String>`
+- `is_in_path(path)` → `bool`
+- `add_to_path(path)` → `Result<(), String>`
+- `remove_from_path(path)` → `Result<(), String>`
+- `get_default_php_path()` → `Option<String>`
+- `get_default_node_path()` → `Option<String>`
 
 ### Site Commands (`commands/sites.rs`)
 - `scan_sites(directories)` → `Result<Vec<Site>, String>`
@@ -79,7 +88,7 @@ src-tauri/
 - `open_in_browser(url)` → `Result<(), String>`
 
 ### PHP Commands (`commands/php.rs`)
-- `get_available_php_versions()` → `Result<Vec<AvailableVersion>, String>`
+- `get_available_php_versions(force_refresh?)` → `Result<Vec<AvailableVersion>, String>`
 - `get_installed_php_versions()` → `Vec<InstalledVersion>`
 - `install_php_version(app, version)` → `Result<(), String>`
 - `uninstall_php_version(version)` → `Result<(), String>`
@@ -87,7 +96,7 @@ src-tauri/
 - `toggle_php_extension(php_path, extension, enable)` → `Result<(), String>`
 
 ### Node Commands (`commands/node.rs`)
-- `get_available_node_versions()` → `Result<Vec<AvailableVersion>, String>`
+- `get_available_node_versions(force_refresh?)` → `Result<Vec<AvailableVersion>, String>`
 - `get_installed_node_versions()` → `Vec<InstalledVersion>`
 - `install_node_version(app, version)` → `Result<(), String>`
 - `uninstall_node_version(version)` → `Result<(), String>`
@@ -98,6 +107,9 @@ src-tauri/
 - `start_service(id)` → `Result<(), String>`
 - `stop_service(id)` → `Result<(), String>`
 - `restart_service(id)` → `Result<(), String>`
+- `get_installable_services()` → `Vec<InstallableService>`
+- `install_service(app, service_id, version)` → `Result<(), String>`
+- `uninstall_service(service_id, version)` → `Result<(), String>`
 
 ### Vhost Commands (`commands/vhosts.rs`)
 - `get_vhost_status(site_name)` → `VhostStatus`
@@ -135,6 +147,7 @@ pub struct AvailableVersion { version, full_version, lts, download_url }
 pub struct PhpExtension { name, enabled, builtin }
 pub struct PackageManager { name, command, installed, version, description }
 pub struct ServiceInfo { id, name, status, port, pid, path, description, version }
+pub struct InstallableService { id, name, description, installed, version, versions }
 pub struct VhostStatus { site_name, domain, nginx_config_exists, hosts_entry_exists, is_linked }
 ```
 
