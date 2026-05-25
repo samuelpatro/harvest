@@ -135,12 +135,12 @@ fn hide_popup(popup: &TrayPopup) {
     }
 }
 
-/// 32x32 amber icon (#f59e0b). Placeholder until the real app icon is embedded.
+/// The app icon, decoded from the bundled PNG.
 fn build_icon() -> Icon {
-    const N: u32 = 32;
-    let mut rgba = Vec::with_capacity((N * N * 4) as usize);
-    for _ in 0..(N * N) {
-        rgba.extend_from_slice(&[0xf5, 0x9e, 0x0b, 0xff]);
-    }
-    Icon::from_rgba(rgba, N, N).expect("valid icon bytes")
+    let png = include_bytes!("../assets/icons/32x32.png");
+    let img = image::load_from_memory(png)
+        .expect("decode tray icon")
+        .to_rgba8();
+    let (w, h) = img.dimensions();
+    Icon::from_rgba(img.into_raw(), w, h).expect("valid icon")
 }

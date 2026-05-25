@@ -53,6 +53,15 @@ pub fn setup(app: &AppWindow) {
     b.set_editor_command(cfg.editor_command.clone().into());
     b.set_terminal_command(cfg.terminal_command.clone().into());
 
+    // First-run wizard state.
+    b.set_show_wizard(core::config::is_first_run());
+    let default_home = if cfg.harvest_home.is_empty() {
+        core::types::get_default_harvest_home()
+    } else {
+        cfg.harvest_home.clone()
+    };
+    b.set_wizard_path(default_home.into());
+
     // ---- sites ----
     let weak = app.as_weak();
     b.on_refresh_sites(move || load_sites(weak.clone()));
@@ -94,7 +103,9 @@ pub fn setup(app: &AppWindow) {
 
     // ---- services ----
     let weak = app.as_weak();
-    b.on_refresh_services(move || load_services(weak.clone()));
+    b.on_refresh_services(move || load_services(weak.clone(), false));
+    let weak = app.as_weak();
+    b.on_poll_services(move || load_services(weak.clone(), true));
     let weak = app.as_weak();
     b.on_start_service(move |id| service_action(weak.clone(), id.to_string(), ServiceAction::Start));
     let weak = app.as_weak();
@@ -210,10 +221,56 @@ pub fn setup(app: &AppWindow) {
         });
     });
 
+    // ---- first-run wizard ----
+    let weak = app.as_weak();
+    b.on_wizard_browse(move || {
+        if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+            if let Some(app) = weak.upgrade() {
+                app.global::<Backend>()
+                    .set_wizard_path(folder.to_string_lossy().to_string().into());
+            }
+        }
+    });
+    let weak = app.as_weak();
+    b.on_wizard_finish(move || {
+        let Some(app) = weak.upgrade() else { return };
+        let g = app.global::<Backend>();
+        let path = g.get_wizard_path().to_string();
+        if path.trim().is_empty() {
+            g.set_wizard_error("Please choose a folder.".into());
+            return;
+        }
+        g.set_wizard_error(SharedString::default());
+        let weak = weak.clone();
+        bridge::run(
+            async move {
+                core::config::validate_harvest_path(path.clone())
+                    .and_then(|_| core::config::initialize_harvest_home(path))
+            },
+            move |res| {
+                let Some(app) = weak.upgrade() else { return };
+                let g = app.global::<Backend>();
+                match res {
+                    Ok(()) => {
+                        g.set_show_wizard(false);
+                        let cfg = core::config::get_config();
+                        g.set_harvest_home(cfg.harvest_home.clone().into());
+                        g.set_harvest_path(cfg.harvest_paths.first().cloned().unwrap_or_default().into());
+                        load_sites(weak.clone());
+                        load_services(weak.clone(), false);
+                        load_php(weak.clone(), false);
+                        load_node(weak.clone(), false);
+                    }
+                    Err(e) => g.set_wizard_error(e.into()),
+                }
+            },
+        );
+    });
+
     // Initial data load.
     let weak = app.as_weak();
     load_sites(weak.clone());
-    load_services(weak.clone());
+    load_services(weak.clone(), false);
     load_php(weak.clone(), false);
     load_node(weak, false);
 }
@@ -324,9 +381,11 @@ fn build_site_items(sites: Vec<core::types::Site>, statuses: Vec<core::vhosts::V
 
 // ---------------- services ----------------
 
-fn load_services(weak: Weak<AppWindow>) {
-    if let Some(app) = weak.upgrade() {
-        app.global::<Backend>().set_services_loading(true);
+fn load_services(weak: Weak<AppWindow>, quiet: bool) {
+    if !quiet {
+        if let Some(app) = weak.upgrade() {
+            app.global::<Backend>().set_services_loading(true);
+        }
     }
     bridge::run(
         async move { core::services::get_services() },
@@ -363,7 +422,7 @@ fn service_action(weak: Weak<AppWindow>, id: String, action: ServiceAction) {
         },
         move |res| {
             report_err(&weak, res);
-            load_services(weak.clone());
+            load_services(weak.clone(), false);
         },
     );
 }

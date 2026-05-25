@@ -69,6 +69,11 @@ export global Backend {
 
     in-out property <string> search-query;
     in-out property <string> status-message;
+
+    // First-run wizard
+    in-out property <bool> show-wizard;
+    in-out property <string> wizard-path;
+    in-out property <string> wizard-error;
     in-out property <bool> services-loading;
     in-out property <bool> php-loading;
     in-out property <bool> node-loading;
@@ -83,6 +88,7 @@ export global Backend {
 
     // ---- services ----
     callback refresh-services();
+    callback poll-services();
     callback start-service(string /*id*/);
     callback stop-service(string /*id*/);
     callback restart-service(string /*id*/);
@@ -106,4 +112,8 @@ export global Backend {
     // ---- settings ----
     callback browse-harvest-path();
     callback save-settings();
+
+    // ---- first-run wizard ----
+    callback wizard-browse();
+    callback wizard-finish();
 }

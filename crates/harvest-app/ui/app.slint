@@ -8,6 +8,7 @@ import { VersionsView } from "versions.slint";
 import { SettingsView } from "settings.slint";
 import { ExtensionsModal } from "ext.slint";
 import { PackageManagersPanel } from "pms.slint";
+import { SetupWizard } from "wizard.slint";
 
 // Re-export so `slint::include_modules!` generates the TrayPopup type and the
 // Slint compiler validates tray.slint.
@@ -41,6 +42,8 @@ component NavItem inherits Rectangle {
 
 export component AppWindow inherits Window {
     title: "Harvest";
+    icon: @image-url("../assets/icons/icon.png");
+    default-font-family: "Outfit";
     background: Theme.bg;
     preferred-width: 1200px;
     preferred-height: 800px;
@@ -54,6 +57,12 @@ export component AppWindow inherits Window {
     in-out property <int> current-view: 0;
 
     Rectangle {
+        // Poll service status every 5s (also keeps the tray popup live).
+        Timer {
+            interval: 5s;
+            triggered => { Backend.poll-services(); }
+        }
+
         VerticalLayout {
             width: 100%;
             height: 100%;
@@ -80,12 +89,6 @@ export component AppWindow inherits Window {
                         NavItem { label: "Services"; index: 4; current: root.current-view; selected => { root.current-view = 4; } }
                         NavItem { label: "Settings"; index: 5; current: root.current-view; selected => { root.current-view = 5; } }
                         Rectangle { vertical-stretch: 1; }
-                        Text {
-                            text: Backend.status-message;
-                            color: Theme.text-muted;
-                            font-size: 11px;
-                            wrap: word-wrap;
-                        }
                     }
                 }
 
@@ -129,6 +132,41 @@ export component AppWindow inherits Window {
         if Backend.ext-version-path != "" : ExtensionsModal {
             width: 100%;
             height: 100%;
+        }
+
+        if Backend.show-wizard : SetupWizard {
+            width: 100%;
+            height: 100%;
+        }
+
+        // Transient status toast (bottom-right, auto-dismiss).
+        if Backend.status-message != "" : Rectangle {
+            x: parent.width - self.width - 16px;
+            y: parent.height - self.height - 16px;
+            width: 320px;
+            height: 46px;
+            background: Theme.bg-card;
+            border-color: Theme.border;
+            border-width: 1px;
+            border-radius: Theme.radius-md;
+            drop-shadow-color: #00000066;
+            drop-shadow-blur: 16px;
+
+            HorizontalLayout {
+                padding: 12px;
+                Text {
+                    text: Backend.status-message;
+                    color: Theme.text;
+                    font-size: 13px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+            TouchArea { clicked => { Backend.status-message = ""; } }
+            Timer {
+                interval: 4s;
+                triggered => { Backend.status-message = ""; }
+            }
         }
     }
 }
