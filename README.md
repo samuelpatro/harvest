@@ -1,26 +1,27 @@
 # Harvest - Local Development Environment Manager
 
-A native desktop application for managing local PHP/Node.js development environments on Windows. Built with Tauri 2.0, Vue 3, and TypeScript.
+A fully native desktop application for managing local PHP/Node.js development environments on Windows. Built in Rust with a Slint UI (no webview).
 
 ## Tech Stack
 
-- **Backend:** Tauri 2.0 (Rust)
-- **Frontend:** Vue 3 + TypeScript
-- **Styling:** Tailwind CSS 4 (dark theme, amber accent)
-- **State:** Pinia
-- **Routing:** Vue Router
+- **UI:** Slint (native rendering via winit + femtovg)
+- **Backend:** `harvest-core` (plain Rust, no UI dependencies)
+- **Async:** tokio (work runs off the UI thread, results marshalled back to the Slint event loop)
+- **Theme:** dark, amber accent (#f59e0b); Outfit (UI) / JetBrains Mono (code)
+
+Single language end to end, native rendering, no bundled webview, no CDN fonts.
 
 ---
 
 ## Feature Checklist
 
 ### Core Infrastructure
-- [x] Tauri 2.0 + Vue 3 + TypeScript setup
+- [x] Native Rust + Slint app (no webview)
 - [x] Dark theme with amber accent (#f59e0b)
-- [x] Custom frameless window
+- [x] Custom frameless window (drag, resize, min/max/close)
 - [x] Sidebar navigation
-- [x] Page header component
-- [x] Responsive layout
+- [x] Reusable component set (Card, Badge, buttons, ProgressBar, StatusDot)
+- [x] System tray icon + popup
 
 ### PHP Management
 - [x] Fetch available PHP versions from windows.php.net
@@ -78,11 +79,11 @@ A native desktop application for managing local PHP/Node.js development environm
 ### System Integration
 - [x] Configuration persistence (JSON file)
 - [x] Cross-platform path handling (Windows/macOS/Linux)
-- [ ] System tray icon
+- [x] System tray icon + popup (toggle, hide-on-blur, quick actions)
 - [ ] Minimize to tray
 - [ ] SQLite database for config
 - [ ] Windows startup option
-- [ ] Auto-updater (Tauri updater plugin)
+- [ ] Auto-updater
 
 ### Harvest Standalone Structure
 - [x] `C:\harvest\bin\` - Service binaries (nginx, mysql, redis, php)
@@ -95,64 +96,45 @@ A native desktop application for managing local PHP/Node.js development environm
 
 ## Project Structure
 
+Cargo workspace with two crates:
+
 ```
 harvest/
-├── src/                          # Vue frontend
-│   ├── components/
-│   │   ├── PageHeader.vue        # Page title + subtitle
-│   │   ├── PhpSelector.vue       # Global PHP version selector
-│   │   ├── ServiceCard.vue       # Service status card
-│   │   ├── SetupWizard.vue       # First-run setup wizard
-│   │   ├── Sidebar.vue           # Navigation sidebar
-│   │   └── SiteCard.vue          # Site display card
-│   ├── views/
-│   │   ├── Dashboard.vue         # Overview page
-│   │   ├── Sites.vue             # Site management
-│   │   ├── Php.vue               # PHP version management
-│   │   ├── Node.vue              # Node.js version management
-│   │   ├── Services.vue          # Service management
-│   │   └── Settings.vue          # App settings
-│   ├── stores/
-│   │   ├── services.ts           # Services state
-│   │   ├── sites.ts              # Sites state
-│   │   └── config.ts             # App configuration
-│   ├── styles/
-│   │   └── main.css              # Global styles + CSS variables
-│   ├── tray/
-│   │   ├── TrayPopup.vue         # System tray popup UI
-│   │   └── main.ts               # Tray window entry point
-│   ├── types/
-│   │   └── index.ts              # TypeScript interfaces
-│   ├── App.vue
-│   ├── main.ts
-│   └── router.ts
-├── src-tauri/
-│   ├── src/
-│   │   ├── main.rs               # Tauri entry point
-│   │   ├── lib.rs                # App init, command registration
-│   │   ├── types/
-│   │   │   └── mod.rs            # Shared data structures
-│   │   └── commands/
-│   │       ├── mod.rs            # Module exports
-│   │       ├── config.rs         # App configuration
-│   │       ├── sites.rs          # Site scanning & actions
-│   │       ├── php.rs            # PHP version management
-│   │       ├── node.rs           # Node.js & package managers
-│   │       ├── services.rs       # Service management
-│   │       └── vhosts.rs         # Vhost & domain management
-│   ├── Cargo.toml
-│   └── tauri.conf.json
-├── index.html
-├── package.json
-├── vite.config.ts
+├── Cargo.toml                    # workspace (default-members = harvest-app)
+├── crates/
+│   ├── harvest-core/             # backend logic, no UI deps
+│   │   ├── src/
+│   │   │   ├── lib.rs
+│   │   │   ├── config.rs         # config + Windows PATH management
+│   │   │   ├── sites.rs          # site scanning, detection, open actions
+│   │   │   ├── php.rs            # PHP versions + extensions
+│   │   │   ├── node.rs           # Node.js versions + package managers
+│   │   │   ├── services.rs       # nginx/MySQL/Redis management
+│   │   │   ├── vhosts.rs         # vhost + hosts file management
+│   │   │   ├── types.rs          # shared data structures
+│   │   │   └── progress.rs       # transport-agnostic install progress
+│   │   └── tests/logic.rs        # unit tests for pure helpers
+│   └── harvest-app/              # native Slint binary
+│       ├── build.rs              # compiles ui/app.slint
+│       ├── assets/icons/         # bundled app/tray icon
+│       ├── ui/                   # Slint: app, theme, components + views
+│       └── src/
+│           ├── main.rs           # frameless window + backend wiring
+│           ├── window.rs         # titlebar drag/min/max/close (winit)
+│           ├── tray.rs           # system tray icon + popup
+│           ├── bridge.rs         # tokio runtime -> event loop bridge
+│           └── controllers.rs    # wires Slint Backend global to harvest-core
 └── README.md
 ```
 
 ---
 
-## Implemented Tauri Commands
+## Backend API (`harvest-core`)
 
-### Config (`commands/config.rs`)
+Plain Rust functions (no UI framework). The Slint controllers call these directly;
+installs report progress via a `ProgressSink` callback instead of a Tauri event.
+
+### Config (`config.rs`)
 ```rust
 get_config() -> AppConfig
 save_config(config: AppConfig) -> Result<(), String>
@@ -168,7 +150,7 @@ get_default_php_path() -> Option<String>
 get_default_node_path() -> Option<String>
 ```
 
-### Sites (`commands/sites.rs`)
+### Sites (`sites.rs`)
 ```rust
 scan_sites(directories: Vec<String>) -> Result<Vec<Site>, String>
 open_in_editor(path: String, editor: String) -> Result<(), String>
@@ -176,37 +158,37 @@ open_in_terminal(path: String, terminal: String) -> Result<(), String>
 open_in_browser(url: String) -> Result<(), String>
 ```
 
-### PHP (`commands/php.rs`)
+### PHP (`php.rs`)
 ```rust
 get_available_php_versions(force_refresh: Option<bool>) -> Result<Vec<AvailableVersion>, String>
 get_installed_php_versions() -> Vec<InstalledVersion>
-install_php_version(app: AppHandle, version: String) -> Result<(), String>
+install_php_version(version: String, progress: ProgressSink) -> Result<(), String>
 uninstall_php_version(version: String) -> Result<(), String>
 get_php_extensions(php_path: String) -> Result<Vec<PhpExtension>, String>
 toggle_php_extension(php_path: String, extension: String, enable: bool) -> Result<(), String>
 ```
 
-### Node.js (`commands/node.rs`)
+### Node.js (`node.rs`)
 ```rust
 get_available_node_versions(force_refresh: Option<bool>) -> Result<Vec<AvailableVersion>, String>
 get_installed_node_versions() -> Vec<InstalledVersion>
-install_node_version(app: AppHandle, version: String) -> Result<(), String>
+install_node_version(version: String, progress: ProgressSink) -> Result<(), String>
 uninstall_node_version(version: String) -> Result<(), String>
 get_package_managers() -> Vec<PackageManager>
 ```
 
-### Services (`commands/services.rs`)
+### Services (`services.rs`)
 ```rust
 get_services() -> Vec<ServiceInfo>
 start_service(id: String) -> Result<(), String>
 stop_service(id: String) -> Result<(), String>
 restart_service(id: String) -> Result<(), String>
 get_installable_services() -> Vec<InstallableService>
-install_service(app: AppHandle, service_id: String, version: String) -> Result<(), String>
-uninstall_service(service_id: String, version: String) -> Result<(), String>
+install_service(service_id: String, version: String, progress: ProgressSink) -> Result<(), String>
+uninstall_service(service_id: String) -> Result<(), String>
 ```
 
-### Vhosts (`commands/vhosts.rs`)
+### Vhosts (`vhosts.rs`)
 ```rust
 get_vhost_status(site_name: String) -> VhostStatus
 get_all_vhost_statuses(site_names: Vec<String>) -> Vec<VhostStatus>
@@ -220,62 +202,32 @@ check_nginx_config() -> Result<String, String>
 ## Development
 
 ```bash
-# Install dependencies
-bun install
+# Run the app (default workspace member is harvest-app)
+cargo run
 
-# Run development
-bun run tauri dev
+# Build the whole workspace
+cargo build
 
-# Build for production
-bun run tauri build
+# Release build (single native binary, no webview)
+cargo build --release
+
+# Type/UI check only the backend
+cargo build -p harvest-core
 ```
+
+The Slint VS Code extension gives a live preview of the `.slint` files in
+`crates/harvest-app/ui/`.
 
 ## Testing
 
-### Rust Backend Tests
-
-The Rust backend includes comprehensive integration tests in the `tests/` directory:
-
 ```bash
-# Run all Rust tests
-cd src-tauri && cargo test
-
-# Run tests with output
-cd src-tauri && cargo test -- --nocapture
-
-# Run specific test file
-cd src-tauri && cargo test --test sites_tests
-cd src-tauri && cargo test --test vhosts_tests
-cd src-tauri && cargo test --test services_tests
-cd src-tauri && cargo test --test node_tests
-cd src-tauri && cargo test --test php_tests
-cd src-tauri && cargo test --test types_tests
-cd src-tauri && cargo test --test config_tests
+# Backend unit tests (pure logic: version parsing/compare, PATH ops,
+# stack/version extraction, hosts/nginx helpers)
+cargo test -p harvest-core
 ```
 
-### Test Structure
-
-```
-src-tauri/
-├── src/           # Source code (no inline tests)
-└── tests/         # Integration tests (112 total)
-    ├── types_tests.rs      # 23 tests - AppConfig, Site, StackItem, InstallableService, etc.
-    ├── sites_tests.rs      # 16 tests - Version parsing, site ID generation
-    ├── vhosts_tests.rs     # 15 tests - Nginx config, hosts file parsing
-    ├── services_tests.rs   # 9 tests - Version extraction from CLI output
-    ├── node_tests.rs       # 13 tests - Download URLs, folder parsing
-    ├── php_tests.rs        # 12 tests - PHP version parsing
-    └── config_tests.rs     # 24 tests - PATH normalization and manipulation
-```
-
-### Prerequisites for Running Tests
-
-On Linux, you'll need Tauri development dependencies:
-```bash
-sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
-```
-
-On Windows, no additional dependencies are required.
+Tests live in `crates/harvest-core/tests/logic.rs`. No system libraries are
+required to build/test `harvest-core`; the Slint UI builds natively on Windows.
 
 ---
 
