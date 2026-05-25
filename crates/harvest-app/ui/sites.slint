@@ -1,0 +1,71 @@
+import { Theme } from "theme.slint";
+import { Backend } from "globals.slint";
+import { Card, Badge, PrimaryButton, GhostButton, PageHeader } from "components.slint";
+import { ScrollView, LineEdit } from "std-widgets.slint";
+
+export component SitesView inherits VerticalLayout {
+    padding: Theme.space-4;
+    spacing: Theme.space-3;
+
+    HorizontalLayout {
+        PageHeader { title: "Sites"; subtitle: Backend.sites.length + " site(s)"; }
+        Rectangle { horizontal-stretch: 1; }
+        VerticalLayout { alignment: center; GhostButton { text: "Rescan"; clicked => { Backend.refresh-sites(); } } }
+    }
+
+    search := LineEdit {
+        placeholder-text: "Search sites by name or domain…";
+        text <=> Backend.search-query;
+        edited(t) => { Backend.search-changed(t); }
+    }
+
+    ScrollView {
+        VerticalLayout {
+            spacing: Theme.space-2;
+            for site in Backend.sites : Card {
+                height: 92px;
+                HorizontalLayout {
+                    padding: Theme.space-3;
+                    spacing: Theme.space-3;
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 4px;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text { text: site.name; color: Theme.text; font-size: 15px; font-weight: 600; }
+                            Badge { text: "PHP " + site.php-version; }
+                            if site.stack != "" : Badge { text: site.stack; fg: Theme.accent; }
+                            if site.linked : Badge { text: "linked"; fg: Theme.success; }
+                        }
+                        Text {
+                            text: (site.ssl ? "https://" : "http://") + site.domain;
+                            color: Theme.text-muted;
+                            font-size: 12px;
+                        }
+                        Text { text: site.path; color: Theme.text-muted; font-size: 11px; }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    VerticalLayout {
+                        alignment: center;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            PrimaryButton { text: "Open"; clicked => { Backend.open-browser(site.domain, site.ssl); } }
+                            GhostButton { text: "Code"; clicked => { Backend.open-editor(site.path); } }
+                            GhostButton { text: "Terminal"; clicked => { Backend.open-terminal(site.path); } }
+                            GhostButton {
+                                text: site.linking ? "…" : (site.linked ? "Unlink" : "Link");
+                                enabled: !site.linking;
+                                clicked => { Backend.toggle-link(site.name, site.path, site.linked); }
+                            }
+                        }
+                    }
+                }
+            }
+            if Backend.sites.length == 0 : Text {
+                text: "No sites found. Check your paths in Settings, then Rescan.";
+                color: Theme.text-muted;
+                font-size: 13px;
+            }
+        }
+    }
+}

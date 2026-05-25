@@ -1,0 +1,130 @@
+import { Theme } from "theme.slint";
+
+export component Card inherits Rectangle {
+    background: Theme.bg-card;
+    border-color: Theme.border;
+    border-width: 1px;
+    border-radius: Theme.radius-lg;
+}
+
+export component Badge inherits Rectangle {
+    in property <string> text;
+    in property <color> fg: Theme.text-muted;
+    in property <color> bg: Theme.bg-elevated;
+    background: bg;
+    border-radius: Theme.radius-sm;
+    height: 20px;
+    horizontal-stretch: 0;
+    HorizontalLayout {
+        padding-left: 8px;
+        padding-right: 8px;
+        Text {
+            text: root.text;
+            color: root.fg;
+            vertical-alignment: center;
+            font-size: 11px;
+            font-weight: 600;
+        }
+    }
+}
+
+export component StatusDot inherits Rectangle {
+    in property <bool> on;
+    width: 9px;
+    height: 9px;
+    border-radius: 4.5px;
+    background: on ? Theme.success : Theme.danger;
+    drop-shadow-color: on ? Theme.success : Theme.danger;
+    drop-shadow-blur: 8px;
+}
+
+export component PrimaryButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 32px;
+    horizontal-stretch: 0;
+    border-radius: Theme.radius-md;
+    opacity: enabled ? 1.0 : 0.5;
+    background: !enabled ? Theme.accent : (ta.has-hover ? Theme.accent-hover : Theme.accent);
+    animate background { duration: 100ms; }
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        Text {
+            text: root.text;
+            color: #1a1205;
+            vertical-alignment: center;
+            font-size: 13px;
+            font-weight: 600;
+        }
+    }
+}
+
+export component GhostButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <color> fg: Theme.text;
+    callback clicked();
+    height: 32px;
+    horizontal-stretch: 0;
+    border-radius: Theme.radius-md;
+    border-width: 1px;
+    border-color: Theme.border;
+    opacity: enabled ? 1.0 : 0.5;
+    background: ta.has-hover && enabled ? Theme.bg-elevated : transparent;
+    animate background { duration: 100ms; }
+    ta := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+        Text {
+            text: root.text;
+            color: root.fg;
+            vertical-alignment: center;
+            font-size: 13px;
+            font-weight: 500;
+        }
+    }
+}
+
+export component ProgressBar inherits Rectangle {
+    in property <int> percent;
+    height: 6px;
+    border-radius: 3px;
+    background: Theme.bg-elevated;
+    Rectangle {
+        x: 0;
+        y: 0;
+        height: parent.height;
+        width: parent.width * (root.percent / 100.0);
+        border-radius: 3px;
+        background: Theme.accent;
+        animate width { duration: 150ms; }
+    }
+}
+
+export component PageHeader inherits VerticalLayout {
+    in property <string> title;
+    in property <string> subtitle;
+    spacing: 2px;
+    Text {
+        text: root.title;
+        color: Theme.text;
+        font-size: 24px;
+        font-weight: 700;
+    }
+    Text {
+        text: root.subtitle;
+        color: Theme.text-muted;
+        font-size: 13px;
+        visible: root.subtitle != "";
+    }
+}

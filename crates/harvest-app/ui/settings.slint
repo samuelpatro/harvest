@@ -1,0 +1,77 @@
+import { Theme } from "theme.slint";
+import { Backend } from "globals.slint";
+import { Card, PrimaryButton, GhostButton, PageHeader } from "components.slint";
+import { ScrollView, LineEdit } from "std-widgets.slint";
+
+component Field inherits VerticalLayout {
+    in property <string> label;
+    in property <string> hint;
+    spacing: 4px;
+    Text { text: root.label; color: Theme.text; font-size: 13px; font-weight: 600; }
+    Text { text: root.hint; color: Theme.text-muted; font-size: 11px; visible: root.hint != ""; }
+    @children
+}
+
+export component SettingsView inherits VerticalLayout {
+    padding: Theme.space-4;
+    spacing: Theme.space-3;
+
+    PageHeader { title: "Settings"; subtitle: "Paths and external tools"; }
+
+    ScrollView {
+        VerticalLayout {
+            spacing: Theme.space-4;
+
+            Card {
+                height: 92px;
+                VerticalLayout {
+                    padding: Theme.space-3;
+                    Field {
+                        label: "Sites folder";
+                        hint: "Directory scanned for projects";
+                        HorizontalLayout {
+                            spacing: 8px;
+                            LineEdit { text <=> Backend.harvest-path; }
+                            GhostButton { text: "Browse…"; clicked => { Backend.browse-harvest-path(); } }
+                        }
+                    }
+                }
+            }
+
+            Card {
+                height: 76px;
+                VerticalLayout {
+                    padding: Theme.space-3;
+                    Field {
+                        label: "Editor command";
+                        hint: "e.g. code";
+                        LineEdit { text <=> Backend.editor-command; }
+                    }
+                }
+            }
+
+            Card {
+                height: 76px;
+                VerticalLayout {
+                    padding: Theme.space-3;
+                    Field {
+                        label: "Terminal command";
+                        hint: "e.g. wt -d";
+                        LineEdit { text <=> Backend.terminal-command; }
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                Text {
+                    text: "Home: " + Backend.harvest-home;
+                    color: Theme.text-muted;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                PrimaryButton { text: "Save"; clicked => { Backend.save-settings(); } }
+            }
+        }
+    }
+}

@@ -1,0 +1,70 @@
+import { Theme } from "theme.slint";
+import { Backend } from "globals.slint";
+import { Card, StatusDot, PrimaryButton, GhostButton, Badge, PageHeader } from "components.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export component ServicesView inherits VerticalLayout {
+    padding: Theme.space-4;
+    spacing: Theme.space-3;
+
+    HorizontalLayout {
+        PageHeader { title: "Services"; subtitle: "Start, stop, and manage local services"; }
+        Rectangle { horizontal-stretch: 1; }
+        VerticalLayout { alignment: center; GhostButton { text: Backend.services-loading ? "Refreshing…" : "Refresh"; clicked => { Backend.refresh-services(); } } }
+    }
+
+    ScrollView {
+        VerticalLayout {
+            spacing: Theme.space-2;
+            for s in Backend.services : Card {
+                height: 80px;
+                HorizontalLayout {
+                    padding: Theme.space-3;
+                    spacing: Theme.space-3;
+                    VerticalLayout { alignment: center; StatusDot { on: s.status == "running"; } }
+                    VerticalLayout {
+                        alignment: center;
+                        spacing: 3px;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            Text { text: s.name; color: Theme.text; font-size: 15px; font-weight: 600; }
+                            Badge { text: s.version != "" ? s.version : "—"; }
+                            Badge { text: "port " + s.port; }
+                        }
+                        Text { text: s.description; color: Theme.text-muted; font-size: 12px; }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    VerticalLayout {
+                        alignment: center;
+                        HorizontalLayout {
+                            spacing: 8px;
+                            if s.status == "not_installed" : Text {
+                                text: "Not installed";
+                                color: Theme.text-muted;
+                                font-size: 12px;
+                                vertical-alignment: center;
+                            }
+                            if s.status == "stopped" : PrimaryButton {
+                                text: "Start"; enabled: !s.busy;
+                                clicked => { Backend.start-service(s.id); }
+                            }
+                            if s.status == "running" : GhostButton {
+                                text: "Restart"; enabled: !s.busy;
+                                clicked => { Backend.restart-service(s.id); }
+                            }
+                            if s.status == "running" : GhostButton {
+                                text: "Stop"; fg: Theme.danger; enabled: !s.busy;
+                                clicked => { Backend.stop-service(s.id); }
+                            }
+                        }
+                    }
+                }
+            }
+            if Backend.services.length == 0 : Text {
+                text: "No services found.";
+                color: Theme.text-muted;
+                font-size: 13px;
+            }
+        }
+    }
+}

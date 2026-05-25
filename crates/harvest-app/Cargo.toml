@@ -14,3 +14,5 @@ slint-build = "1"
 slint = { version = "1", features = ["unstable-winit-030"] }
 harvest-core = { path = "../harvest-core" }
 tray-icon = "0.24.0"
+tokio = { version = "1.52.3", features = ["rt-multi-thread"] }
+rfd = "0.17.2"

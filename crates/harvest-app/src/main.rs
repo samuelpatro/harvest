@@ -1,3 +1,5 @@
+mod bridge;
+mod controllers;
 mod tray;
 mod window;
 
@@ -12,6 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let app = AppWindow::new()?;
     window::wire_window_controls(&app);
+    controllers::setup(&app);
 
     // Tray popup window: created hidden, shown on tray click. Kept alive for the
     // whole session so the handle isn't dropped (which would destroy it).
