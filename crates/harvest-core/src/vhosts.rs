@@ -176,7 +176,7 @@ pub fn get_vhost_status(site_name: String) -> VhostStatus {
 }
 
 pub fn get_all_vhost_statuses(site_names: Vec<String>) -> Vec<VhostStatus> {
-    site_names.into_iter().map(|name| get_vhost_status(name)).collect()
+    site_names.into_iter().map(get_vhost_status).collect()
 }
 
 pub async fn link_site(site_name: String, root_path: String) -> Result<String, String> {

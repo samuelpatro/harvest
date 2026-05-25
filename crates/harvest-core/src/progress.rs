@@ -35,7 +35,7 @@ pub(crate) fn emit(
     status: &str,
     progress: u32,
 ) {
-    (&**sink)(Progress {
+    (**sink)(Progress {
         kind,
         id: id.to_string(),
         version: version.to_string(),

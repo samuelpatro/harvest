@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use futures_util::StreamExt;
 use crate::config::get_harvest_home;
@@ -499,7 +499,7 @@ pub fn get_installable_services() -> Vec<InstallableService> {
     }).collect()
 }
 
-fn get_installed_service_version(service_id: &str, path: &PathBuf) -> Option<String> {
+fn get_installed_service_version(service_id: &str, path: &Path) -> Option<String> {
     let (exe_path, version_arg): (PathBuf, &str) = match service_id {
         "nginx" => (path.join("nginx.exe"), "-v"),
         "mysql" => (path.join("bin").join("mysqld.exe"), "--version"),
@@ -636,7 +636,7 @@ pub async fn install_service(service_id: String, version: String, progress: Prog
     Ok(())
 }
 
-fn post_install_setup(service_id: &str, install_dir: &PathBuf, harvest_home: &str) -> Result<(), String> {
+fn post_install_setup(service_id: &str, install_dir: &Path, harvest_home: &str) -> Result<(), String> {
     match service_id {
         "nginx" => {
             // Create nginx config directory structure

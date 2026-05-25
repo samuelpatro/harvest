@@ -1,6 +1,7 @@
 //! Behavior-locking tests for the pure helpers extracted into harvest-core.
 //! These avoid filesystem/network/process access so they run anywhere.
 
+use harvest_core::types::{self, AppConfig, Site, StackItem};
 use harvest_core::{config, node, php, services, sites, vhosts};
 
 #[test]
@@ -91,4 +92,78 @@ fn vhost_hosts_and_config_helpers() {
         vhosts::filter_hosts_content("127.0.0.1 foo.test\n127.0.0.1 bar.test", "foo.test"),
         "127.0.0.1 bar.test"
     );
+}
+
+#[test]
+fn filter_hosts_keeps_comments_and_blank_lines() {
+    let input = "# header\n\n127.0.0.1 foo.test\n127.0.0.1 keep.test";
+    let out = vhosts::filter_hosts_content(input, "foo.test");
+    assert!(out.contains("# header"));
+    assert!(out.contains("127.0.0.1 keep.test"));
+    assert!(!out.contains("foo.test"));
+}
+
+#[test]
+fn node_download_urls_cover_known_majors() {
+    for (major, full) in [
+        ("23", "23.5.0"),
+        ("22", "22.12.0"),
+        ("21", "21.7.3"),
+        ("20", "20.18.1"),
+        ("18", "18.20.5"),
+        ("16", "16.20.2"),
+    ] {
+        let url = node::get_node_download_url(major).unwrap();
+        assert!(url.contains(full), "major {major} -> {url}");
+        assert!(url.ends_with("-win-x64.zip"));
+    }
+    // Unknown major falls through to itself.
+    assert!(node::get_node_download_url("99").unwrap().contains("v99"));
+}
+
+#[test]
+fn pathvar_ops_are_case_insensitive_and_targeted() {
+    let pathvar = "C:\\Tools;C:\\Harvest\\bin\\php\\php-8.4.1;C:\\Other";
+    assert!(config::path_exists_in_pathvar("c:/harvest/bin/php/php-8.4.1", pathvar, ';'));
+    let filtered = config::filter_path_from_pathvar("C:/harvest/bin/php/php-8.4.1", pathvar, ';');
+    assert!(!filtered.to_lowercase().contains("php-8.4.1"));
+    assert!(filtered.contains("C:\\Tools"));
+    assert!(filtered.contains("C:\\Other"));
+}
+
+#[test]
+fn app_config_default_has_expected_values() {
+    let cfg = AppConfig::default();
+    assert_eq!(cfg.editor_command, "code");
+    assert_eq!(cfg.terminal_command, "wt -d");
+    assert!(!cfg.first_run_complete);
+    assert!(cfg.harvest_paths.is_empty());
+    assert!(!cfg.harvest_home.is_empty());
+}
+
+#[test]
+fn site_serde_round_trips() {
+    let site = Site {
+        id: "demo-x".into(),
+        name: "demo".into(),
+        path: "C:/www/demo".into(),
+        domain: "demo.test".into(),
+        php_version: "8.4".into(),
+        stack: vec![StackItem { name: "laravel".into(), version: Some("11.0".into()) }],
+        ssl: true,
+    };
+    let json = serde_json::to_string(&site).unwrap();
+    // snake_case field is preserved for the frontend contract.
+    assert!(json.contains("\"php_version\":\"8.4\""));
+    let back: Site = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.name, "demo");
+    assert_eq!(back.stack[0].name, "laravel");
+}
+
+#[test]
+fn default_harvest_home_is_platform_appropriate() {
+    let home = types::get_default_harvest_home();
+    assert!(!home.is_empty());
+    #[cfg(target_os = "windows")]
+    assert!(home.contains("harvest"));
 }

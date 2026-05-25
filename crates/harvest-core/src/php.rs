@@ -1,6 +1,6 @@
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use futures_util::StreamExt;
@@ -207,7 +207,7 @@ pub fn get_installed_php_versions() -> Vec<InstalledVersion> {
     versions
 }
 
-fn extract_php_version(path: &PathBuf, folder_name: &str) -> Option<String> {
+fn extract_php_version(path: &Path, folder_name: &str) -> Option<String> {
     // First try to get version from php.exe -v
     let php_exe = path.join("php.exe");
     if let Ok(output) = Command::new(&php_exe).arg("-v").output() {

@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use crate::types::{Site, StackItem};
 
 /// Extract version string from a serde_json Value, stripping common prefixes like ^ and ~
@@ -31,7 +31,7 @@ pub fn generate_domain(name: &str) -> String {
     format!("{}.test", name)
 }
 
-fn detect_stack(path: &PathBuf) -> Vec<StackItem> {
+fn detect_stack(path: &Path) -> Vec<StackItem> {
     let mut stack = Vec::new();
 
     // Check composer.json for PHP framework versions
@@ -126,7 +126,7 @@ fn detect_stack(path: &PathBuf) -> Vec<StackItem> {
     stack
 }
 
-fn detect_php_version(path: &PathBuf) -> String {
+fn detect_php_version(path: &Path) -> String {
     // Try to read .php-version file
     let php_version_file = path.join(".php-version");
     if php_version_file.exists() {

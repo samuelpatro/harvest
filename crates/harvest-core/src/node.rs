@@ -1,6 +1,6 @@
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use futures_util::StreamExt;
@@ -103,10 +103,7 @@ pub async fn get_available_node_versions(force_refresh: Option<bool>) -> Result<
             if major_num >= 16 && !seen_major.contains(&major) {
                 seen_major.insert(major.clone());
 
-                let is_lts = match &dv.lts {
-                    serde_json::Value::Bool(false) => false,
-                    _ => true,
-                };
+                let is_lts = !matches!(dv.lts, serde_json::Value::Bool(false));
 
                 let download_url = format!(
                     "https://nodejs.org/dist/v{}/node-v{}-win-x64.zip",
@@ -177,7 +174,7 @@ pub fn get_installed_node_versions() -> Vec<InstalledVersion> {
     versions
 }
 
-fn extract_node_version(path: &PathBuf, folder_name: &str) -> Option<String> {
+fn extract_node_version(path: &Path, folder_name: &str) -> Option<String> {
     // First try to get version from node.exe -v
     let node_exe = path.join("node.exe");
     if let Ok(output) = Command::new(&node_exe).arg("-v").output() {
@@ -332,12 +329,10 @@ pub async fn uninstall_node_version(version: String) -> Result<(), String> {
 // Package Manager Commands
 
 pub fn get_package_managers() -> Vec<PackageManager> {
-    let managers = vec![
-        ("npm", "npm", "Node Package Manager - comes with Node.js"),
+    let managers = [("npm", "npm", "Node Package Manager - comes with Node.js"),
         ("yarn", "yarn", "Fast, reliable dependency management"),
         ("pnpm", "pnpm", "Fast, disk space efficient package manager"),
-        ("bun", "bun", "All-in-one JavaScript runtime & toolkit"),
-    ];
+        ("bun", "bun", "All-in-one JavaScript runtime & toolkit")];
 
     managers.iter().map(|(name, cmd, desc)| {
         let (installed, version) = check_package_manager_version(cmd);

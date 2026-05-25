@@ -2,7 +2,6 @@
 //! implements every action callback. Long/blocking work goes through `bridge`.
 
 use std::cell::RefCell;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -496,83 +495,28 @@ fn load_node(weak: Weak<AppWindow>, force: bool) {
     );
 }
 
-/// Group installed + available versions into UI rows. `node` selects major-only
-/// grouping (Node) vs major.minor grouping (PHP).
+/// Map core version groups to Slint rows (grouping logic lives in harvest-core).
 fn build_version_items(
     installed: Vec<InstalledVersion>,
     available: Vec<AvailableVersion>,
     default: Option<String>,
     node: bool,
 ) -> Vec<VersionItem> {
-    let def = default.as_deref().map(core::config::normalize_path_for_comparison);
-    let is_default = |path: &str| -> bool {
-        def.as_deref()
-            .is_some_and(|d| core::config::normalize_path_for_comparison(path) == d)
-    };
-    let group_of = |version: &str| -> String {
-        if node {
-            version.split('.').next().unwrap_or(version).to_string()
-        } else {
-            version.split('.').take(2).collect::<Vec<_>>().join(".")
-        }
-    };
-
-    let mut items = Vec::new();
-    let mut seen = std::collections::HashSet::new();
-
-    for av in &available {
-        seen.insert(av.version.clone());
-        let inst = installed.iter().find(|i| group_of(&i.version) == av.version);
-        let item = match inst {
-            Some(i) => VersionItem {
-                id: av.version.clone().into(),
-                label: i.version.clone().into(),
-                path: i.path.clone().into(),
-                installed: true,
-                is_default: is_default(&i.path),
-                lts: av.lts,
-                update_available: compare_versions(&av.full_version, &i.version) == Ordering::Greater,
-                installing: false,
-                progress: 0,
-                status: SharedString::default(),
-            },
-            None => VersionItem {
-                id: av.version.clone().into(),
-                label: av.full_version.clone().into(),
-                path: SharedString::default(),
-                installed: false,
-                is_default: false,
-                lts: av.lts,
-                update_available: false,
-                installing: false,
-                progress: 0,
-                status: SharedString::default(),
-            },
-        };
-        items.push(item);
-    }
-
-    // Installed versions with no matching available entry (e.g. EOL).
-    for i in &installed {
-        let g = group_of(&i.version);
-        if seen.insert(g.clone()) {
-            items.push(VersionItem {
-                id: g.into(),
-                label: i.version.clone().into(),
-                path: i.path.clone().into(),
-                installed: true,
-                is_default: is_default(&i.path),
-                lts: false,
-                update_available: false,
-                installing: false,
-                progress: 0,
-                status: SharedString::default(),
-            });
-        }
-    }
-
-    items.sort_by(|a, b| compare_versions(b.id.as_str(), a.id.as_str()));
-    items
+    core::versions::group_versions(&installed, &available, default.as_deref(), node)
+        .into_iter()
+        .map(|g| VersionItem {
+            id: g.id.into(),
+            label: g.label.into(),
+            path: g.path.into(),
+            installed: g.installed,
+            is_default: g.is_default,
+            lts: g.lts,
+            update_available: g.update_available,
+            installing: false,
+            progress: 0,
+            status: SharedString::default(),
+        })
+        .collect()
 }
 
 fn install_version(weak: Weak<AppWindow>, node: bool, id: String) {
@@ -694,12 +638,6 @@ fn apply_ext_filter(query: &str) {
 }
 
 // ---------------- helpers ----------------
-
-fn compare_versions(a: &str, b: &str) -> Ordering {
-    let pa: Vec<u32> = a.split('.').filter_map(|s| s.parse().ok()).collect();
-    let pb: Vec<u32> = b.split('.').filter_map(|s| s.parse().ok()).collect();
-    pa.cmp(&pb)
-}
 
 fn report_err(weak: &Weak<AppWindow>, res: Result<(), String>) {
     if let (Err(e), Some(app)) = (res, weak.upgrade()) {
