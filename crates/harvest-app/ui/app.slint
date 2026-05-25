@@ -1,0 +1,103 @@
+import { Theme } from "theme.slint";
+import { TitleBar } from "titlebar.slint";
+
+// Re-export so `slint::include_modules!` generates the TrayPopup type and the
+// Slint compiler validates tray.slint.
+export { TrayPopup } from "tray.slint";
+
+component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <int> index;
+    in property <int> current;
+    callback selected();
+
+    height: 38px;
+    border-radius: Theme.radius-md;
+    background: root.index == root.current ? Theme.bg-card
+        : (ta.has-hover ? Theme.bg-card : transparent);
+    animate background { duration: 100ms; }
+
+    ta := TouchArea {
+        clicked => { root.selected(); }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.space-3;
+        Text {
+            text: root.label;
+            color: root.index == root.current ? Theme.accent : Theme.text;
+            vertical-alignment: center;
+            font-size: 14px;
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "Harvest";
+    background: Theme.bg;
+    preferred-width: 1200px;
+    preferred-height: 800px;
+    // Backend auto-handles edge resize for the frameless window.
+    resize-border-width: 6px;
+
+    callback start-drag();
+    callback minimize();
+    callback toggle-maximize();
+    callback close();
+
+    in-out property <int> current-view: 0;
+
+    VerticalLayout {
+        TitleBar {
+            start-drag => { root.start-drag(); }
+            minimize => { root.minimize(); }
+            toggle-maximize => { root.toggle-maximize(); }
+            close => { root.close(); }
+        }
+
+        HorizontalLayout {
+            // Sidebar
+            Rectangle {
+                width: 220px;
+                background: Theme.bg-elevated;
+                VerticalLayout {
+                    padding: Theme.space-3;
+                    spacing: Theme.space-1;
+                    NavItem { label: "Dashboard"; index: 0; current: root.current-view; selected => { root.current-view = 0; } }
+                    NavItem { label: "Sites"; index: 1; current: root.current-view; selected => { root.current-view = 1; } }
+                    NavItem { label: "PHP"; index: 2; current: root.current-view; selected => { root.current-view = 2; } }
+                    NavItem { label: "Node"; index: 3; current: root.current-view; selected => { root.current-view = 3; } }
+                    NavItem { label: "Services"; index: 4; current: root.current-view; selected => { root.current-view = 4; } }
+                    NavItem { label: "Settings"; index: 5; current: root.current-view; selected => { root.current-view = 5; } }
+                    Rectangle { vertical-stretch: 1; }
+                }
+            }
+
+            // Content placeholder (real views land in Phase 3)
+            Rectangle {
+                background: Theme.bg;
+                VerticalLayout {
+                    padding: Theme.space-4;
+                    spacing: Theme.space-2;
+                    Text {
+                        text: root.current-view == 0 ? "Dashboard"
+                            : root.current-view == 1 ? "Sites"
+                            : root.current-view == 2 ? "PHP"
+                            : root.current-view == 3 ? "Node"
+                            : root.current-view == 4 ? "Services"
+                            : "Settings";
+                        color: Theme.text;
+                        font-size: 24px;
+                        font-weight: 700;
+                    }
+                    Text {
+                        text: "Native Slint scaffold — frameless window + custom titlebar.";
+                        color: Theme.text-muted;
+                        font-size: 14px;
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                }
+            }
+        }
+    }
+}

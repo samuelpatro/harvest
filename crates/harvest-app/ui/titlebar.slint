@@ -1,0 +1,72 @@
+import { Theme } from "theme.slint";
+
+component WinButton inherits Rectangle {
+    in property <string> glyph;
+    in property <color> hover-bg: Theme.bg-card;
+    callback clicked();
+
+    width: 42px;
+    height: 28px;
+    border-radius: Theme.radius-sm;
+    background: ta.has-hover ? hover-bg : transparent;
+    animate background { duration: 100ms; }
+
+    ta := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    Text {
+        text: root.glyph;
+        color: Theme.text;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-size: 13px;
+    }
+}
+
+// Frameless-window chrome: a draggable bar with min/maximize/close.
+export component TitleBar inherits Rectangle {
+    height: 40px;
+    background: Theme.bg-elevated;
+
+    callback start-drag();
+    callback minimize();
+    callback toggle-maximize();
+    callback close();
+
+    // Full-width drag region; sits below the layout so empty areas drag the
+    // window while the buttons (higher in the tree) still receive clicks.
+    TouchArea {
+        pointer-event(ev) => {
+            if (ev.kind == PointerEventKind.down && ev.button == PointerEventButton.left) {
+                root.start-drag();
+            }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: Theme.space-4;
+        padding-right: Theme.space-2;
+        spacing: Theme.space-1;
+
+        Text {
+            text: "Harvest";
+            color: Theme.text-muted;
+            vertical-alignment: center;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        VerticalLayout {
+            alignment: center;
+            HorizontalLayout {
+                spacing: Theme.space-1;
+                WinButton { glyph: "\u{2013}"; clicked => { root.minimize(); } }
+                WinButton { glyph: "\u{25A1}"; clicked => { root.toggle-maximize(); } }
+                WinButton { glyph: "\u{2715}"; hover-bg: Theme.danger; clicked => { root.close(); } }
+            }
+        }
+    }
+}

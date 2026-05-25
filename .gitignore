@@ -1,3 +1,6 @@
+# Rust / Cargo (workspace build output)
+/target
+
 # Environment files
 .env
 .env.*

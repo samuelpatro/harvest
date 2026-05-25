@@ -1,0 +1,15 @@
+[package]
+name = "harvest-app"
+version = "0.1.0"
+edition = "2021"
+description = "Native Slint UI for Harvest"
+
+[build-dependencies]
+slint-build = "1"
+
+[dependencies]
+# `unstable-winit-030` exposes `slint::winit_030` (WinitWindowAccessor + the
+# BackendSelector window-attributes hook) which we need for the frameless
+# window, custom-titlebar drag, and min/max/close controls.
+slint = { version = "1", features = ["unstable-winit-030"] }
+harvest-core = { path = "../harvest-core" }

@@ -1,0 +1,150 @@
+import { Theme } from "theme.slint";
+
+// Status dot with colored glow (parity with TrayPopup.vue .status-dot).
+component StatusDot inherits Rectangle {
+    in property <bool> running;
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: running ? Theme.success : Theme.danger;
+    drop-shadow-color: running ? Theme.success : Theme.danger;
+    drop-shadow-blur: 8px;
+}
+
+component SectionLabel inherits Text {
+    color: #71717a;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+component MenuRow inherits Rectangle {
+    in property <string> label;
+    in property <color> label-color: Theme.text;
+    callback clicked();
+    height: 34px;
+    background: ta.has-hover ? Theme.bg-card : transparent;
+    animate background { duration: 120ms; }
+    ta := TouchArea { clicked => { root.clicked(); } }
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        Text {
+            text: root.label;
+            color: root.label-color;
+            vertical-alignment: center;
+            font-size: 13px;
+        }
+    }
+}
+
+component ServiceRow inherits Rectangle {
+    in property <string> name;
+    in property <bool> running;
+    height: 36px;
+    background: ta.has-hover ? Theme.bg-card : transparent;
+    animate background { duration: 120ms; }
+    ta := TouchArea { }
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: center;
+            StatusDot { running: root.running; }
+        }
+        Text {
+            text: root.name;
+            color: Theme.text;
+            vertical-alignment: center;
+            font-size: 13px;
+        }
+        Rectangle { horizontal-stretch: 1; }
+    }
+}
+
+component Divider inherits Rectangle {
+    height: 1px;
+    background: #ffffff10;
+}
+
+component FooterBtn inherits Rectangle {
+    in property <string> glyph;
+    callback clicked();
+    width: 32px;
+    height: 32px;
+    border-radius: Theme.radius-md;
+    background: ta.has-hover ? Theme.bg-card : transparent;
+    animate background { duration: 120ms; }
+    ta := TouchArea { clicked => { root.clicked(); } }
+    Text {
+        text: root.glyph;
+        color: Theme.text-muted;
+        font-size: 15px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+// Tray popup window (visual parity with src/tray/TrayPopup.vue). The native
+// tray-icon + show/hide/position/blur wiring is platform glue added on the
+// desktop target (Spike B integration).
+export component TrayPopup inherits Window {
+    width: 280px;
+    height: 440px;
+    background: Theme.bg-elevated;
+
+    callback open-services();
+    callback open-sites();
+    callback stop-all();
+    callback hide-requested();
+
+    VerticalLayout {
+        // Scrollable content
+        VerticalLayout {
+            vertical-stretch: 1;
+
+            // Quick Access
+            VerticalLayout {
+                padding-top: 8px;
+                padding-bottom: 8px;
+                SectionLabel { x: 16px; text: "QUICK ACCESS"; }
+                MenuRow { label: "Services"; clicked => { root.open-services(); } }
+                MenuRow { label: "Sites"; clicked => { root.open-sites(); } }
+            }
+            Divider { }
+
+            // Services
+            VerticalLayout {
+                padding-top: 8px;
+                padding-bottom: 8px;
+                SectionLabel { x: 16px; text: "SERVICES"; }
+                MenuRow { label: "Stop all services"; clicked => { root.stop-all(); } }
+                ServiceRow { name: "Nginx"; running: true; }
+                ServiceRow { name: "MySQL"; running: true; }
+                ServiceRow { name: "Redis"; running: false; }
+            }
+            Divider { }
+
+            // PHP
+            VerticalLayout {
+                padding-top: 8px;
+                padding-bottom: 8px;
+                MenuRow { label: "Use PHP 8.4"; label-color: Theme.accent; }
+                MenuRow { label: "Use PHP 8.3"; }
+                MenuRow { label: "Open configuration files"; label-color: Theme.text-muted; }
+            }
+        }
+
+        // Footer
+        Divider { }
+        HorizontalLayout {
+            alignment: end;
+            padding: 12px;
+            spacing: 4px;
+            FooterBtn { glyph: "\u{2699}"; }
+            FooterBtn { glyph: "\u{2B07}"; }
+            FooterBtn { glyph: "\u{23FB}"; clicked => { root.hide-requested(); } }
+        }
+    }
+}
