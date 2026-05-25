@@ -14,7 +14,7 @@ use harvest_core::progress::{Progress, ProgressSink};
 use harvest_core::types::{AvailableVersion, InstalledVersion};
 
 use crate::bridge;
-use crate::{AppWindow, Backend, ServiceItem, SiteItem, VersionItem};
+use crate::{AppWindow, Backend, ExtItem, PmItem, ServiceItem, SiteItem, TrayPopup, VersionItem};
 
 thread_local! {
     static SITES_MODEL: Rc<VecModel<SiteItem>> = Rc::new(VecModel::default());
@@ -22,6 +22,10 @@ thread_local! {
     static SERVICES_MODEL: Rc<VecModel<ServiceItem>> = Rc::new(VecModel::default());
     static PHP_MODEL: Rc<VecModel<VersionItem>> = Rc::new(VecModel::default());
     static NODE_MODEL: Rc<VecModel<VersionItem>> = Rc::new(VecModel::default());
+    static EXT_MODEL: Rc<VecModel<ExtItem>> = Rc::new(VecModel::default());
+    static EXT_ALL: RefCell<Vec<ExtItem>> = const { RefCell::new(Vec::new()) };
+    static EXT_FILTER: RefCell<String> = const { RefCell::new(String::new()) };
+    static PM_MODEL: Rc<VecModel<PmItem>> = Rc::new(VecModel::default());
 }
 
 #[derive(Clone, Copy)]
@@ -39,6 +43,8 @@ pub fn setup(app: &AppWindow) {
     SERVICES_MODEL.with(|m| b.set_services(m.clone().into()));
     PHP_MODEL.with(|m| b.set_php_versions(m.clone().into()));
     NODE_MODEL.with(|m| b.set_node_versions(m.clone().into()));
+    EXT_MODEL.with(|m| b.set_extensions(m.clone().into()));
+    PM_MODEL.with(|m| b.set_package_managers(m.clone().into()));
 
     // Load current config into the editable fields.
     let cfg = core::config::get_config();
@@ -117,6 +123,41 @@ pub fn setup(app: &AppWindow) {
         bridge::run(async move { swap_default(p) }, move |_| load_php(weak.clone(), false));
     });
 
+    // ---- php extensions ----
+    let weak = app.as_weak();
+    b.on_load_extensions(move |path, label| {
+        if let Some(app) = weak.upgrade() {
+            let g = app.global::<Backend>();
+            g.set_ext_version_path(path.clone());
+            g.set_ext_version_label(label);
+            g.set_ext_filter(SharedString::default());
+        }
+        EXT_FILTER.with(|c| c.borrow_mut().clear());
+        load_extensions(path.to_string());
+    });
+    b.on_ext_filter_changed(|q| apply_ext_filter(q.as_str()));
+    b.on_toggle_extension(|path, name, enable| {
+        let (p, n) = (path.to_string(), name.to_string());
+        bridge::run(
+            async move { core::php::toggle_php_extension(p.clone(), n, enable).map(|_| p) },
+            move |res| {
+                if let Ok(p) = res {
+                    load_extensions(p);
+                }
+            },
+        );
+    });
+    let weak = app.as_weak();
+    b.on_close_extensions(move || {
+        if let Some(app) = weak.upgrade() {
+            let g = app.global::<Backend>();
+            g.set_ext_version_path(SharedString::default());
+            g.set_ext_version_label(SharedString::default());
+        }
+        EXT_ALL.with(|c| c.borrow_mut().clear());
+        EXT_MODEL.with(|m| m.set_vec(Vec::new()));
+    });
+
     // ---- node ----
     let weak = app.as_weak();
     b.on_refresh_node(move |force| load_node(weak.clone(), force));
@@ -175,6 +216,50 @@ pub fn setup(app: &AppWindow) {
     load_services(weak.clone());
     load_php(weak.clone(), false);
     load_node(weak, false);
+}
+
+/// Share the live services model with the tray popup (a separate window with its
+/// own Backend global) and wire the popup's quick actions.
+pub fn wire_tray(app: &AppWindow, popup: &TrayPopup) {
+    SERVICES_MODEL.with(|m| popup.global::<Backend>().set_services(m.clone().into()));
+
+    let appw = app.as_weak();
+    let popupw = popup.as_weak();
+    popup.on_open_services(move || {
+        if let Some(a) = appw.upgrade() {
+            a.set_current_view(4);
+            let _ = a.show();
+        }
+        if let Some(p) = popupw.upgrade() {
+            let _ = p.hide();
+        }
+    });
+
+    let appw = app.as_weak();
+    let popupw = popup.as_weak();
+    popup.on_open_sites(move || {
+        if let Some(a) = appw.upgrade() {
+            a.set_current_view(1);
+            let _ = a.show();
+        }
+        if let Some(p) = popupw.upgrade() {
+            let _ = p.hide();
+        }
+    });
+
+    let appw = app.as_weak();
+    popup.on_stop_all(move || {
+        let ids: Vec<String> = SERVICES_MODEL.with(|m| {
+            (0..m.row_count())
+                .filter_map(|i| m.row_data(i))
+                .filter(|r| r.status.as_str() == "running")
+                .map(|r| r.id.to_string())
+                .collect()
+        });
+        for id in ids {
+            service_action(appw.clone(), id, ServiceAction::Stop);
+        }
+    });
 }
 
 // ---------------- sites ----------------
@@ -329,11 +414,22 @@ fn load_node(weak: Weak<AppWindow>, force: bool) {
             let installed = core::node::get_installed_node_versions();
             let available = core::node::get_available_node_versions(Some(force)).await.unwrap_or_default();
             let default = core::config::get_default_node_path();
-            (installed, available, default)
+            let pms = core::node::get_package_managers();
+            (installed, available, default, pms)
         },
-        move |(installed, available, default)| {
+        move |(installed, available, default, pms)| {
             let items = build_version_items(installed, available, default, true);
             NODE_MODEL.with(|m| m.set_vec(items));
+            let pm_items: Vec<PmItem> = pms
+                .into_iter()
+                .map(|p| PmItem {
+                    name: p.name.into(),
+                    version: p.version.unwrap_or_default().into(),
+                    installed: p.installed,
+                    description: p.description.into(),
+                })
+                .collect();
+            PM_MODEL.with(|m| m.set_vec(pm_items));
             if let Some(app) = weak.upgrade() {
                 app.global::<Backend>().set_node_loading(false);
             }
@@ -501,6 +597,41 @@ fn swap_default(new_path: String) {
 
 fn is_node_path(p: &str) -> bool {
     core::config::normalize_path_for_comparison(p).contains("\\bin\\nodejs\\")
+}
+
+// ---------------- php extensions ----------------
+
+fn load_extensions(path: String) {
+    bridge::run(
+        async move { core::php::get_php_extensions(path).unwrap_or_default() },
+        |exts| {
+            let items: Vec<ExtItem> = exts
+                .into_iter()
+                .map(|e| ExtItem {
+                    name: e.name.into(),
+                    enabled: e.enabled,
+                    builtin: e.builtin,
+                })
+                .collect();
+            EXT_ALL.with(|c| *c.borrow_mut() = items);
+            let q = EXT_FILTER.with(|c| c.borrow().clone());
+            apply_ext_filter(&q);
+        },
+    );
+}
+
+fn apply_ext_filter(query: &str) {
+    EXT_FILTER.with(|c| *c.borrow_mut() = query.to_string());
+    let q = query.to_lowercase();
+    EXT_ALL.with(|c| {
+        let filtered: Vec<ExtItem> = c
+            .borrow()
+            .iter()
+            .filter(|e| q.is_empty() || e.name.as_str().to_lowercase().contains(&q))
+            .cloned()
+            .collect();
+        EXT_MODEL.with(|m| m.set_vec(filtered));
+    });
 }
 
 // ---------------- helpers ----------------

@@ -1,4 +1,5 @@
 import { Theme } from "theme.slint";
+import { Backend } from "globals.slint";
 
 // Status dot with colored glow (parity with TrayPopup.vue .status-dot).
 component StatusDot inherits Rectangle {
@@ -120,9 +121,10 @@ export component TrayPopup inherits Window {
                 padding-bottom: 8px;
                 SectionLabel { x: 16px; text: "SERVICES"; }
                 MenuRow { label: "Stop all services"; clicked => { root.stop-all(); } }
-                ServiceRow { name: "Nginx"; running: true; }
-                ServiceRow { name: "MySQL"; running: true; }
-                ServiceRow { name: "Redis"; running: false; }
+                for s in Backend.services : ServiceRow {
+                    name: s.name;
+                    running: s.status == "running";
+                }
             }
             Divider { }
 

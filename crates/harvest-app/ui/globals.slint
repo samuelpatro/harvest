@@ -42,6 +42,12 @@ export struct PmItem {
     description: string,
 }
 
+export struct ExtItem {
+    name: string,
+    enabled: bool,
+    builtin: bool,
+}
+
 export global Backend {
     // ---- data (filled from Rust) ----
     in-out property <[SiteItem]> sites;
@@ -49,6 +55,12 @@ export global Backend {
     in-out property <[VersionItem]> php-versions;
     in-out property <[VersionItem]> node-versions;
     in-out property <[PmItem]> package-managers;
+
+    // PHP extensions panel
+    in-out property <[ExtItem]> extensions;
+    in-out property <string> ext-version-label;
+    in-out property <string> ext-version-path;
+    in-out property <string> ext-filter;
 
     in-out property <string> harvest-home;
     in-out property <string> harvest-path;
@@ -80,6 +92,10 @@ export global Backend {
     callback install-php(string /*id*/);
     callback uninstall-php(string /*label*/);
     callback set-default-php(string /*path*/);
+    callback load-extensions(string /*path*/, string /*label*/);
+    callback ext-filter-changed(string);
+    callback toggle-extension(string /*path*/, string /*name*/, bool /*enable*/);
+    callback close-extensions();
 
     // ---- node ----
     callback refresh-node(bool /*force*/);

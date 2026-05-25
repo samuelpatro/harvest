@@ -9,10 +9,12 @@ export component VersionsView inherits VerticalLayout {
     in property <string> subtitle;
     in property <[VersionItem]> items;
     in property <bool> loading;
+    in property <bool> show-extensions: false;
     callback refresh();
     callback install(string /*id*/);
     callback uninstall(string /*label*/);
     callback set-default(string /*path*/);
+    callback show-ext(string /*path*/, string /*label*/);
 
     padding: Theme.space-4;
     spacing: Theme.space-3;
@@ -62,6 +64,9 @@ export component VersionsView inherits VerticalLayout {
                                 }
                                 if v.installed && !v.is-default : GhostButton {
                                     text: "Set default"; clicked => { root.set-default(v.path); }
+                                }
+                                if v.installed && root.show-extensions : GhostButton {
+                                    text: "Extensions"; clicked => { root.show-ext(v.path, v.label); }
                                 }
                                 if v.installed : GhostButton {
                                     text: "Uninstall"; fg: Theme.danger; clicked => { root.uninstall(v.label); }

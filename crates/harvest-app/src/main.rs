@@ -20,6 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // whole session so the handle isn't dropped (which would destroy it).
     let popup = TrayPopup::new()?;
     tray::setup_tray(&popup);
+    controllers::wire_tray(&app, &popup);
 
     app.run()?;
     Ok(())
