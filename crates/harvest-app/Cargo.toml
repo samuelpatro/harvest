@@ -13,3 +13,4 @@ slint-build = "1"
 # window, custom-titlebar drag, and min/max/close controls.
 slint = { version = "1", features = ["unstable-winit-030"] }
 harvest-core = { path = "../harvest-core" }
+tray-icon = "0.24.0"
