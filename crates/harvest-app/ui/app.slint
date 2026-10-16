@@ -1,0 +1,172 @@
+import { Theme } from "theme.slint";
+import { TitleBar } from "titlebar.slint";
+import { Backend } from "globals.slint";
+import { DashboardView } from "dashboard.slint";
+import { SitesView } from "sites.slint";
+import { ServicesView } from "services.slint";
+import { VersionsView } from "versions.slint";
+import { SettingsView } from "settings.slint";
+import { ExtensionsModal } from "ext.slint";
+import { PackageManagersPanel } from "pms.slint";
+import { SetupWizard } from "wizard.slint";
+
+// Re-export so `slint::include_modules!` generates the TrayPopup type and the
+// Slint compiler validates tray.slint.
+export { TrayPopup } from "tray.slint";
+export { Backend, SiteItem, ServiceItem, VersionItem, PmItem, ExtItem } from "globals.slint";
+
+component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <int> index;
+    in property <int> current;
+    callback selected();
+
+    height: 38px;
+    border-radius: Theme.radius-md;
+    background: root.index == root.current ? Theme.bg-card
+        : (ta.has-hover ? Theme.bg-card : transparent);
+    animate background { duration: 100ms; }
+
+    ta := TouchArea { clicked => { root.selected(); } }
+
+    HorizontalLayout {
+        padding-left: Theme.space-3;
+        Text {
+            text: root.label;
+            color: root.index == root.current ? Theme.accent : Theme.text;
+            vertical-alignment: center;
+            font-size: 14px;
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "Harvest";
+    icon: @image-url("../assets/icons/icon.png");
+    default-font-family: "Outfit";
+    background: Theme.bg;
+    preferred-width: 1200px;
+    preferred-height: 800px;
+    resize-border-width: 6px;
+
+    callback start-drag();
+    callback minimize();
+    callback toggle-maximize();
+    callback close();
+
+    in-out property <int> current-view: 0;
+
+    Rectangle {
+        // Poll service status every 5s (also keeps the tray popup live).
+        Timer {
+            interval: 5s;
+            triggered => { Backend.poll-services(); }
+        }
+
+        VerticalLayout {
+            width: 100%;
+            height: 100%;
+
+            TitleBar {
+                start-drag => { root.start-drag(); }
+                minimize => { root.minimize(); }
+                toggle-maximize => { root.toggle-maximize(); }
+                close => { root.close(); }
+            }
+
+            HorizontalLayout {
+                // Sidebar
+                Rectangle {
+                    width: 220px;
+                    background: Theme.bg-elevated;
+                    VerticalLayout {
+                        padding: Theme.space-3;
+                        spacing: Theme.space-1;
+                        NavItem { label: "Dashboard"; index: 0; current: root.current-view; selected => { root.current-view = 0; } }
+                        NavItem { label: "Sites"; index: 1; current: root.current-view; selected => { root.current-view = 1; } }
+                        NavItem { label: "PHP"; index: 2; current: root.current-view; selected => { root.current-view = 2; } }
+                        NavItem { label: "Node"; index: 3; current: root.current-view; selected => { root.current-view = 3; } }
+                        NavItem { label: "Services"; index: 4; current: root.current-view; selected => { root.current-view = 4; } }
+                        NavItem { label: "Settings"; index: 5; current: root.current-view; selected => { root.current-view = 5; } }
+                        Rectangle { vertical-stretch: 1; }
+                    }
+                }
+
+                // Content
+                Rectangle {
+                    background: Theme.bg;
+                    if root.current-view == 0 : DashboardView { }
+                    if root.current-view == 1 : SitesView { }
+                    if root.current-view == 2 : VersionsView {
+                        title: "PHP";
+                        subtitle: "Manage PHP versions";
+                        items: Backend.php-versions;
+                        loading: Backend.php-loading;
+                        show-extensions: true;
+                        refresh => { Backend.refresh-php(true); }
+                        install(id) => { Backend.install-php(id); }
+                        uninstall(label) => { Backend.uninstall-php(label); }
+                        set-default(path) => { Backend.set-default-php(path); }
+                        show-ext(path, label) => { Backend.load-extensions(path, label); }
+                    }
+                    if root.current-view == 3 : VerticalLayout {
+                        VersionsView {
+                            vertical-stretch: 1;
+                            title: "Node.js";
+                            subtitle: "Manage Node.js versions";
+                            items: Backend.node-versions;
+                            loading: Backend.node-loading;
+                            refresh => { Backend.refresh-node(true); }
+                            install(id) => { Backend.install-node(id); }
+                            uninstall(label) => { Backend.uninstall-node(label); }
+                            set-default(path) => { Backend.set-default-node(path); }
+                        }
+                        PackageManagersPanel { }
+                    }
+                    if root.current-view == 4 : ServicesView { }
+                    if root.current-view == 5 : SettingsView { }
+                }
+            }
+        }
+
+        if Backend.ext-version-path != "" : ExtensionsModal {
+            width: 100%;
+            height: 100%;
+        }
+
+        if Backend.show-wizard : SetupWizard {
+            width: 100%;
+            height: 100%;
+        }
+
+        // Transient status toast (bottom-right, auto-dismiss).
+        if Backend.status-message != "" : Rectangle {
+            x: parent.width - self.width - 16px;
+            y: parent.height - self.height - 16px;
+            width: 320px;
+            height: 46px;
+            background: Theme.bg-card;
+            border-color: Theme.border;
+            border-width: 1px;
+            border-radius: Theme.radius-md;
+            drop-shadow-color: #00000066;
+            drop-shadow-blur: 16px;
+
+            HorizontalLayout {
+                padding: 12px;
+                Text {
+                    text: Backend.status-message;
+                    color: Theme.text;
+                    font-size: 13px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+            TouchArea { clicked => { Backend.status-message = ""; } }
+            Timer {
+                interval: 4s;
+                triggered => { Backend.status-message = ""; }
+            }
+        }
+    }
+}

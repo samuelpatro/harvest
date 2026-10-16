@@ -1,0 +1,119 @@
+// Shared data structures + the Backend bridge. Rust fills the models and
+// implements the callbacks against harvest-core.
+
+export struct SiteItem {
+    name: string,
+    domain: string,
+    path: string,
+    php-version: string,
+    stack: string,
+    ssl: bool,
+    linked: bool,
+    linking: bool,
+}
+
+export struct ServiceItem {
+    id: string,
+    name: string,
+    description: string,
+    status: string,   // "running" | "stopped" | "not_installed"
+    port: int,
+    version: string,
+    busy: bool,
+}
+
+export struct VersionItem {
+    id: string,        // PHP: "8.4"; Node: "22"
+    label: string,     // full version shown to the user
+    path: string,
+    installed: bool,
+    is-default: bool,
+    lts: bool,
+    update-available: bool,
+    installing: bool,
+    progress: int,
+    status: string,
+}
+
+export struct PmItem {
+    name: string,
+    version: string,
+    installed: bool,
+    description: string,
+}
+
+export struct ExtItem {
+    name: string,
+    enabled: bool,
+    builtin: bool,
+}
+
+export global Backend {
+    // ---- data (filled from Rust) ----
+    in-out property <[SiteItem]> sites;
+    in-out property <[ServiceItem]> services;
+    in-out property <[VersionItem]> php-versions;
+    in-out property <[VersionItem]> node-versions;
+    in-out property <[PmItem]> package-managers;
+
+    // PHP extensions panel
+    in-out property <[ExtItem]> extensions;
+    in-out property <string> ext-version-label;
+    in-out property <string> ext-version-path;
+    in-out property <string> ext-filter;
+
+    in-out property <string> harvest-home;
+    in-out property <string> harvest-path;
+    in-out property <string> editor-command;
+    in-out property <string> terminal-command;
+
+    in-out property <string> search-query;
+    in-out property <string> status-message;
+
+    // First-run wizard
+    in-out property <bool> show-wizard;
+    in-out property <string> wizard-path;
+    in-out property <string> wizard-error;
+    in-out property <bool> services-loading;
+    in-out property <bool> php-loading;
+    in-out property <bool> node-loading;
+
+    // ---- sites ----
+    callback refresh-sites();
+    callback search-changed(string);
+    callback open-browser(string /*domain*/, bool /*ssl*/);
+    callback open-editor(string /*path*/);
+    callback open-terminal(string /*path*/);
+    callback toggle-link(string /*name*/, string /*path*/, bool /*linked*/);
+
+    // ---- services ----
+    callback refresh-services();
+    callback poll-services();
+    callback start-service(string /*id*/);
+    callback stop-service(string /*id*/);
+    callback restart-service(string /*id*/);
+
+    // ---- php ----
+    callback refresh-php(bool /*force*/);
+    callback install-php(string /*id*/);
+    callback uninstall-php(string /*label*/);
+    callback set-default-php(string /*path*/);
+    callback load-extensions(string /*path*/, string /*label*/);
+    callback ext-filter-changed(string);
+    callback toggle-extension(string /*path*/, string /*name*/, bool /*enable*/);
+    callback close-extensions();
+
+    // ---- node ----
+    callback refresh-node(bool /*force*/);
+    callback install-node(string /*id*/);
+    callback uninstall-node(string /*label*/);
+    callback set-default-node(string /*path*/);
+
+    // ---- settings ----
+    callback browse-harvest-path();
+    callback save-settings();
+
+    // ---- first-run wizard ----
+    callback wizard-browse();
+    callback wizard-finish();
+}

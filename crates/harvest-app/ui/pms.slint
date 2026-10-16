@@ -1,0 +1,31 @@
+import { Theme } from "theme.slint";
+import { Backend } from "globals.slint";
+import { Card, Badge } from "components.slint";
+
+export component PackageManagersPanel inherits VerticalLayout {
+    padding-left: Theme.space-4;
+    padding-right: Theme.space-4;
+    padding-bottom: Theme.space-4;
+    spacing: Theme.space-2;
+
+    Text { text: "Package managers"; color: Theme.text; font-size: 15px; font-weight: 600; }
+
+    HorizontalLayout {
+        spacing: Theme.space-2;
+        for pm in Backend.package-managers : Card {
+            horizontal-stretch: 1;
+            height: 72px;
+            VerticalLayout {
+                padding: Theme.space-3;
+                spacing: 4px;
+                HorizontalLayout {
+                    spacing: 8px;
+                    Text { text: pm.name; color: Theme.text; font-size: 14px; font-weight: 600; }
+                    if pm.installed : Badge { text: pm.version; fg: Theme.success; }
+                    if !pm.installed : Badge { text: "missing"; }
+                }
+                Text { text: pm.description; color: Theme.text-muted; font-size: 11px; wrap: word-wrap; }
+            }
+        }
+    }
+}

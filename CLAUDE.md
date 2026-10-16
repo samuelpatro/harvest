@@ -4,151 +4,118 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Harvest is a native desktop application for managing local PHP/OctoberCMS development environments, similar to Laravel Herd. Built with Tauri 2.0 (Rust backend) and Vue 3 + TypeScript frontend.
+Harvest is a fully native desktop application for managing local PHP/OctoberCMS development
+environments on Windows, similar to Laravel Herd. It is written in Rust with a GPUI UI (via
+gpui-kit; native GPU rendering, no webview). It was migrated from Tauri 2.0 + Vue 3, then from
+Slint (see `docs/gpui-migration.md`).
 
 ## Development Commands
 
 ```bash
-# Install dependencies
-bun install
+# Run the app (workspace default member is harvest-gpui, binary `harvest`)
+cargo run
 
-# Run development server (starts both Vite and Tauri)
-bun run tauri dev
+# Build the whole workspace
+cargo build
 
-# Build for production
-bun run tauri build
+# Release build (single native binary)
+cargo build --release
 
-# Type check
-bunx vue-tsc --noEmit
+# Backend only (fast; no system libraries needed)
+cargo build -p harvest-core
+cargo test  -p harvest-core
 
-# Frontend only dev server
-bun run dev
+# UI crate tests (icon rendering)
+cargo test -p harvest-gpui
 ```
+
+GPUI needs the latest stable Rust. On macOS it renders with Metal (needs Xcode); on Windows it
+needs the MSVC toolchain (Visual Studio Build Tools, "Desktop development with C++").
 
 ## Architecture
 
-### Frontend (Vue 3 + TypeScript)
-- **Entry**: `src/main.ts` → `src/App.vue`
-- **Routing**: `src/router.ts` - Vue Router with views (Dashboard, Sites, Php, Node, Services, Settings)
-- **State**: Pinia stores in `src/stores/` - `sites.ts`, `services.ts`, `config.ts`
-- **Types**: `src/types/index.ts` - TypeScript interfaces (Site, StackItem, ServiceInfo, etc.)
-- **Styling**: Tailwind CSS 4 with CSS variables in `src/styles/main.css`
+Cargo workspace:
 
-### Backend (Rust/Tauri)
-```
-src-tauri/
-├── src/
-│   ├── main.rs              # Tauri entry point
-│   ├── lib.rs               # App initialization, command registration
-│   ├── types/
-│   │   └── mod.rs           # Shared data structures
-│   └── commands/
-│       ├── mod.rs           # Module exports
-│       ├── config.rs        # App configuration (get/save config)
-│       ├── sites.rs         # Site scanning, detection, open actions
-│       ├── php.rs           # PHP version management, extensions
-│       ├── node.rs          # Node.js versions, package managers
-│       ├── services.rs      # Service management (Phase 2)
-│       └── vhosts.rs        # Vhost & domain management
-├── Cargo.toml
-└── tauri.conf.json
-```
+### `crates/harvest-core` (backend, no UI dependencies)
+- `config.rs`: app config (JSON in the OS config dir) + Windows PATH management (winreg).
+- `sites.rs`: scan project directories, detect framework/stack/PHP version, open actions.
+- `php.rs` / `node.rs`: installed + available versions (cached 24h), install/uninstall, extensions
+  (PHP) / package managers (Node).
+- `services.rs`: nginx/MySQL/Redis detection, start/stop/restart, install/uninstall.
+- `vhosts.rs`: nginx vhost + hosts file management for `.test` domains.
+- `versions.rs`: grouping installed/available versions into rows.
+- `types.rs`: shared serde structs.
+- `progress.rs`: `Progress` / `ProgressSink` (a transport-agnostic callback) for install progress.
+- Pure helpers are unit-tested in `tests/`.
 
-### Key Tauri Plugins
-- `tauri-plugin-dialog` - Native folder picker
-- `tauri-plugin-shell` - Open external applications
-- `tauri-plugin-opener` - Default browser opening
+### `crates/harvest-gpui` (native GPUI binary `harvest`)
+- `main.rs`: opens the main window (blurred on macOS, Mica on Windows; traffic lights centered in
+  the 52pt toolbar), the shared `Store`, and the tray.
+- `store.rs`: the `Store` entity. Owns all data loaded from harvest-core and implements every
+  action (sites, services, PHP/Node versions, extensions, settings, first run). Emits
+  `StoreEvent::{Info, Error}`; polls service status every 5s.
+- `bridge.rs`: shared tokio runtime. `bridge::spawn(fut)` starts core work off the UI thread and
+  returns a future that GPUI tasks await.
+- `app.rs`: main window shell. Unified toolbar (drawn into gpui-component's `TitleBar`), sidebar,
+  page switch, overlays (extensions sheet, first-run wizard), notifications.
+- Pages: `dashboard.rs`, `sites.rs`, `versions.rs` (PHP and Node.js), `services.rs`,
+  `settings.rs`, plus `extensions.rs` (sheet) and `wizard.rs` (first run).
+- `tray.rs`: `tray-icon` icon + popup window. Icon and tooltip follow service status.
+- `theme.rs`: brand tokens, type scale (`Type` trait), gpui-component theme overrides.
+- `ui.rs`: shared building blocks (page body, sections, inset grouped lists, chips, capsules,
+  brand mark, toolbar type, folder picker).
+- `assets.rs`: icon asset source (default gpui-kit icons + the extra Lucide icons we use) and
+  rasterized brand/tray icons (resvg).
+
+### `crates/harvest-app` (legacy)
+The previous Slint UI, kept until the GPUI app is verified on Windows. Not a default member, so
+`cargo run` / `cargo build` skip it; build it with `-p harvest-app`.
+
+## UI <-> backend pattern
+
+Every view holds an `Entity<Store>` and `cx.observe`s it, so a store `cx.notify()` re-renders the
+views. Actions are `Store` methods called through `store.update(cx, ...)`. Blocking or async core
+calls go through `bridge::spawn(...)`; the store awaits them in `cx.spawn` and writes results back
+with `this.update(cx, ...)`. Install progress arrives through a `ProgressSink` that forwards to a
+futures channel drained on the UI thread. User-facing results are `StoreEvent`s, which `HarvestApp`
+turns into notifications.
+
+Each page also has `fn toolbar(this: &Entity<Self>, cx: &App) -> ui::Toolbar` (title, subtitle,
+actions) that `app.rs` renders into the window toolbar.
+
+## GPUI gotchas
+
+- gpui-kit pins its GPUI snapshot (`gpui-pre`); depend on `gpui-kit` only, never on `gpui`.
+- The theme's `font_size` is the window rem size: 13px here, so rem-based spacing and component
+  heights are macOS sized. Use the `Type` trait (`.body()`, `.caption()`, ...) for text sizes.
+- gpui-component's root paints the theme background; `ui::clear_root_background` removes it so
+  the window blur shows through the sidebar and the tray popup's rounded corners.
+- Toolbar controls sit inside an `.occlude()` element. Without it, clicks start a window drag on
+  macOS and are reported to Windows as caption area.
+- Gradients between a translucent and an opaque stop render with a bright band; use
+  `theme::mix` for solid stops.
+- Icons: add new Lucide names to `ExtraIcons` in `assets.rs`, or they render empty.
 
 ## Design System
 
-- **Background**: `#0d0d0f` (primary), `#18181b` (elevated), `#1c1c1f` (card)
-- **Accent**: `#f59e0b` (amber)
-- **Fonts**: Outfit (UI), JetBrains Mono (code)
-- **Frameless window** with custom titlebar
+- **Brand gradient**: wheat gold `#f5b83d` to pumpkin `#ef6f2e` (logo, selection, primary buttons).
+- **Surfaces**: warm darks, content `#15120f`, cards `#1e1a16`, sidebar `#0f0d0b` over the window
+  blur, sheets `#231e19`. Text is cream `#f6efe6` (secondary 58%, tertiary 34%).
+- **Category colors**: leaf `#7bcf6b` (running/success), violet `#9d8cff` (PHP), teal `#3cc9b8`
+  (services), sky `#5b9dff`, rose `#f2667a` (errors), stone `#a39a90`.
+- **Type**: system font (SF Pro / Segoe UI), SF sizes (13 body, 11 caption, 15 title3, 20 title2).
+- **Layout**: macOS style. Unified 52pt toolbar, sidebar, inset grouped lists with inset
+  separators, section titles above groups and footnotes below.
 
-## Tauri Commands
+## Site Detection (`harvest-core/src/sites.rs`)
 
-### Config Commands (`commands/config.rs`)
-- `get_config()` → `AppConfig`
-- `save_config(config)` → `Result<(), String>`
-- `is_first_run()` → `bool`
-- `get_harvest_home()` → `String`
-- `initialize_harvest_home(path)` → `Result<(), String>`
-- `validate_harvest_path(path)` → `Result<bool, String>`
-- `is_in_path(path)` → `bool`
-- `add_to_path(path)` → `Result<(), String>`
-- `remove_from_path(path)` → `Result<(), String>`
-- `get_default_php_path()` → `Option<String>`
-- `get_default_node_path()` → `Option<String>`
-
-### Site Commands (`commands/sites.rs`)
-- `scan_sites(directories)` → `Result<Vec<Site>, String>`
-- `open_in_editor(path, editor)` → `Result<(), String>`
-- `open_in_terminal(path, terminal)` → `Result<(), String>`
-- `open_in_browser(url)` → `Result<(), String>`
-
-### PHP Commands (`commands/php.rs`)
-- `get_available_php_versions(force_refresh?)` → `Result<Vec<AvailableVersion>, String>`
-- `get_installed_php_versions()` → `Vec<InstalledVersion>`
-- `install_php_version(app, version)` → `Result<(), String>`
-- `uninstall_php_version(version)` → `Result<(), String>`
-- `get_php_extensions(php_path)` → `Result<Vec<PhpExtension>, String>`
-- `toggle_php_extension(php_path, extension, enable)` → `Result<(), String>`
-
-### Node Commands (`commands/node.rs`)
-- `get_available_node_versions(force_refresh?)` → `Result<Vec<AvailableVersion>, String>`
-- `get_installed_node_versions()` → `Vec<InstalledVersion>`
-- `install_node_version(app, version)` → `Result<(), String>`
-- `uninstall_node_version(version)` → `Result<(), String>`
-- `get_package_managers()` → `Vec<PackageManager>`
-
-### Service Commands (`commands/services.rs`)
-- `get_services()` → `Vec<ServiceInfo>`
-- `start_service(id)` → `Result<(), String>`
-- `stop_service(id)` → `Result<(), String>`
-- `restart_service(id)` → `Result<(), String>`
-- `get_installable_services()` → `Vec<InstallableService>`
-- `install_service(app, service_id, version)` → `Result<(), String>`
-- `uninstall_service(service_id, version)` → `Result<(), String>`
-
-### Vhost Commands (`commands/vhosts.rs`)
-- `get_vhost_status(site_name)` → `VhostStatus`
-- `get_all_vhost_statuses(site_names)` → `Vec<VhostStatus>`
-- `link_site(site_name, root_path)` → `Result<String, String>`
-- `unlink_site(site_name)` → `Result<String, String>`
-- `check_nginx_config()` → `Result<String, String>`
-
-## Site Detection
-
-The Rust backend (`commands/sites.rs`) scans project directories and detects:
-- **PHP frameworks**: OctoberCMS, Laravel, plain PHP (via `composer.json`, `artisan`, module directories)
+Scans project directories and detects:
+- **PHP frameworks**: OctoberCMS, Laravel, plain PHP (via `composer.json`, `artisan`, module dirs)
 - **Frontend stack**: Vue, React, Vite, Tailwind, TypeScript (via `package.json`)
 - **Package managers**: Bun, pnpm, Yarn (via lockfiles)
-- **PHP version**: From `.php-version` file or `composer.json` require
+- **PHP version**: from `.php-version` or `composer.json` require
 
-## Frontend-Backend Communication
+## Backend API
 
-Vue components call Rust via `invoke` from `@tauri-apps/api/core`:
-```typescript
-import { invoke } from '@tauri-apps/api/core'
-const sites = await invoke<Site[]>('scan_sites', { directories: ['/path'] })
-```
-
-Rust returns snake_case fields; the frontend handles mapping as needed.
-
-## Data Types (`types/mod.rs`)
-
-```rust
-pub struct AppConfig { harvest_paths, editor_command, terminal_command }
-pub struct Site { id, name, path, domain, php_version, stack, ssl }
-pub struct StackItem { name, version }
-pub struct InstalledVersion { version, path }
-pub struct AvailableVersion { version, full_version, lts, download_url }
-pub struct PhpExtension { name, enabled, builtin }
-pub struct PackageManager { name, command, installed, version, description }
-pub struct ServiceInfo { id, name, status, port, pid, path, description, version }
-pub struct InstallableService { id, name, description, installed, version, versions }
-pub struct VhostStatus { site_name, domain, nginx_config_exists, hosts_entry_exists, is_linked }
-```
-
-See `README.md` for full roadmap and feature checklist.
+See `README.md` for the full function list per `harvest-core` module, plus the feature checklist
+and roadmap.

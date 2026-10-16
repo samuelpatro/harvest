@@ -1,0 +1,49 @@
+import { Theme } from "theme.slint";
+import { Backend } from "globals.slint";
+import { Card, PageHeader, StatusDot } from "components.slint";
+
+component Stat inherits Card {
+    in property <string> label;
+    in property <string> value;
+    in property <color> accent: Theme.accent;
+    horizontal-stretch: 1;
+    height: 96px;
+    VerticalLayout {
+        padding: Theme.space-3;
+        spacing: 6px;
+        Text { text: root.value; color: root.accent; font-size: 30px; font-weight: 700; }
+        Text { text: root.label; color: Theme.text-muted; font-size: 13px; }
+    }
+}
+
+export component DashboardView inherits VerticalLayout {
+    padding: Theme.space-4;
+    spacing: Theme.space-4;
+
+    PageHeader { title: "Dashboard"; subtitle: "Overview of your local environment"; }
+
+    HorizontalLayout {
+        spacing: Theme.space-3;
+        Stat { label: "Sites"; value: Backend.sites.length; }
+        Stat { label: "Services"; value: Backend.services.length; accent: Theme.success; }
+        Stat { label: "PHP versions"; value: Backend.php-versions.length; }
+        Stat { label: "Node versions"; value: Backend.node-versions.length; }
+    }
+
+    Card {
+        vertical-stretch: 1;
+        VerticalLayout {
+            padding: Theme.space-3;
+            spacing: Theme.space-2;
+            Text { text: "Services"; color: Theme.text; font-size: 15px; font-weight: 600; }
+            for s in Backend.services : HorizontalLayout {
+                height: 30px;
+                spacing: 10px;
+                VerticalLayout { alignment: center; StatusDot { on: s.status == "running"; } }
+                Text { text: s.name; color: Theme.text; font-size: 13px; vertical-alignment: center; }
+                Rectangle { horizontal-stretch: 1; }
+                Text { text: s.status; color: Theme.text-muted; font-size: 12px; vertical-alignment: center; }
+            }
+        }
+    }
+}

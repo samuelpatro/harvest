@@ -1,0 +1,87 @@
+import { Theme } from "theme.slint";
+import { VersionItem } from "globals.slint";
+import { Card, Badge, PrimaryButton, GhostButton, ProgressBar, PageHeader } from "components.slint";
+import { ScrollView } from "std-widgets.slint";
+
+// Shared installed/available version manager, used for both PHP and Node.
+export component VersionsView inherits VerticalLayout {
+    in property <string> title;
+    in property <string> subtitle;
+    in property <[VersionItem]> items;
+    in property <bool> loading;
+    in property <bool> show-extensions: false;
+    callback refresh();
+    callback install(string /*id*/);
+    callback uninstall(string /*label*/);
+    callback set-default(string /*path*/);
+    callback show-ext(string /*path*/, string /*label*/);
+
+    padding: Theme.space-4;
+    spacing: Theme.space-3;
+
+    HorizontalLayout {
+        PageHeader { title: root.title; subtitle: root.subtitle; }
+        Rectangle { horizontal-stretch: 1; }
+        VerticalLayout { alignment: center; GhostButton { text: root.loading ? "Loading…" : "Refresh"; clicked => { root.refresh(); } } }
+    }
+
+    ScrollView {
+        VerticalLayout {
+            spacing: Theme.space-2;
+            for v in root.items : Card {
+                height: v.installing ? 84px : 66px;
+                VerticalLayout {
+                    padding: Theme.space-3;
+                    spacing: 6px;
+                    HorizontalLayout {
+                        spacing: Theme.space-3;
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 3px;
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text { text: v.label; color: Theme.text; font-size: 15px; font-weight: 600; }
+                                if v.lts : Badge { text: "LTS"; fg: Theme.success; }
+                                if v.is-default : Badge { text: "default (PATH)"; fg: Theme.accent; }
+                                if v.update-available : Badge { text: "update"; fg: Theme.accent; }
+                            }
+                            Text {
+                                text: v.installed ? v.path : "not installed";
+                                color: Theme.text-muted;
+                                font-size: 11px;
+                            }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        VerticalLayout {
+                            alignment: center;
+                            HorizontalLayout {
+                                spacing: 8px;
+                                if !v.installed && !v.installing : PrimaryButton {
+                                    text: "Install"; clicked => { root.install(v.id); }
+                                }
+                                if v.installing : Text {
+                                    text: v.status; color: Theme.text-muted; font-size: 12px; vertical-alignment: center;
+                                }
+                                if v.installed && !v.is-default : GhostButton {
+                                    text: "Set default"; clicked => { root.set-default(v.path); }
+                                }
+                                if v.installed && root.show-extensions : GhostButton {
+                                    text: "Extensions"; clicked => { root.show-ext(v.path, v.label); }
+                                }
+                                if v.installed : GhostButton {
+                                    text: "Uninstall"; fg: Theme.danger; clicked => { root.uninstall(v.label); }
+                                }
+                            }
+                        }
+                    }
+                    if v.installing : ProgressBar { percent: v.progress; }
+                }
+            }
+            if root.items.length == 0 && !root.loading : Text {
+                text: "No versions yet. Press Refresh to fetch available versions.";
+                color: Theme.text-muted;
+                font-size: 13px;
+            }
+        }
+    }
+}

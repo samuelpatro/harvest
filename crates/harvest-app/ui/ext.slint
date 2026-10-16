@@ -1,0 +1,77 @@
+import { Theme } from "theme.slint";
+import { Backend } from "globals.slint";
+import { Card, Badge, GhostButton } from "components.slint";
+import { ScrollView, LineEdit, Switch } from "std-widgets.slint";
+
+// Full-window overlay listing/toggling PHP extensions for a selected version.
+export component ExtensionsModal inherits Rectangle {
+    background: #000000bb;
+    // Backdrop click closes.
+    TouchArea { clicked => { Backend.close-extensions(); } }
+
+    Card {
+        width: 540px;
+        height: parent.height * 0.8;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+
+        // Absorb clicks inside the card so they don't reach the backdrop.
+        TouchArea { }
+
+        VerticalLayout {
+            padding: Theme.space-4;
+            spacing: Theme.space-3;
+
+            HorizontalLayout {
+                Text {
+                    text: "Extensions — PHP " + Backend.ext-version-label;
+                    color: Theme.text;
+                    font-size: 16px;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                GhostButton { text: "Close"; clicked => { Backend.close-extensions(); } }
+            }
+
+            LineEdit {
+                placeholder-text: "Filter extensions…";
+                text <=> Backend.ext-filter;
+                edited(t) => { Backend.ext-filter-changed(t); }
+            }
+
+            ScrollView {
+                VerticalLayout {
+                    spacing: 1px;
+                    for e in Backend.extensions : Rectangle {
+                        height: 38px;
+                        border-radius: Theme.radius-sm;
+                        background: row.has-hover ? Theme.bg-elevated : transparent;
+                        row := TouchArea { }
+                        HorizontalLayout {
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 8px;
+                            Text { text: e.name; color: Theme.text; font-size: 13px; vertical-alignment: center; }
+                            if e.builtin : VerticalLayout { alignment: center; Badge { text: "builtin"; } }
+                            Rectangle { horizontal-stretch: 1; }
+                            VerticalLayout {
+                                alignment: center;
+                                Switch {
+                                    checked: e.enabled;
+                                    enabled: !e.builtin;
+                                    toggled => { Backend.toggle-extension(Backend.ext-version-path, e.name, self.checked); }
+                                }
+                            }
+                        }
+                    }
+                    if Backend.extensions.length == 0 : Text {
+                        text: "No extensions found for this version.";
+                        color: Theme.text-muted;
+                        font-size: 13px;
+                    }
+                }
+            }
+        }
+    }
+}

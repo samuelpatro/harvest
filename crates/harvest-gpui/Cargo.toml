@@ -1,0 +1,17 @@
+[package]
+name = "harvest-gpui"
+version = "0.1.0"
+edition = "2021"
+description = "Native GPUI (gpui-kit) UI for Harvest"
+
+[[bin]]
+name = "harvest"
+path = "src/main.rs"
+
+[dependencies]
+gpui-kit = "0.7.3"
+harvest-core = { path = "../harvest-core" }
+futures = "0.3"
+tray-icon = "0.24.0"
+tokio = { version = "1.52.3", features = ["rt-multi-thread"] }
+resvg = "0.46"
