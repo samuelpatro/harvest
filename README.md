@@ -1,13 +1,14 @@
 # Harvest - Local Development Environment Manager
 
-A fully native desktop application for managing local PHP/Node.js development environments on Windows. Built in Rust with a Slint UI (no webview).
+A fully native desktop application for managing local PHP/Node.js development environments on Windows. Built in Rust with a GPUI UI (no webview).
 
 ## Tech Stack
 
-- **UI:** Slint (native rendering via winit + femtovg)
+- **UI:** GPUI (Zed's GPU-accelerated UI framework) via [gpui-kit](https://gpui-kit.com), which pins a GPUI snapshot and bundles gpui-component
 - **Backend:** `harvest-core` (plain Rust, no UI dependencies)
-- **Async:** tokio (work runs off the UI thread, results marshalled back to the Slint event loop)
-- **Theme:** dark, amber accent (#f59e0b); Outfit (UI) / JetBrains Mono (code)
+- **Async:** tokio for core work, awaited from GPUI tasks on the UI thread
+- **Tray:** `tray-icon`, with a status-aware icon drawn by resvg
+- **Theme:** warm darks with a wheat gold to pumpkin brand gradient; system font (SF Pro / Segoe UI)
 
 Single language end to end, native rendering, no bundled webview, no CDN fonts.
 
@@ -16,12 +17,12 @@ Single language end to end, native rendering, no bundled webview, no CDN fonts.
 ## Feature Checklist
 
 ### Core Infrastructure
-- [x] Native Rust + Slint app (no webview)
-- [x] Dark theme with amber accent (#f59e0b)
-- [x] Custom frameless window (drag, resize, min/max/close)
-- [x] Sidebar navigation
-- [x] Reusable component set (Card, Badge, buttons, ProgressBar, StatusDot)
-- [x] System tray icon + popup
+- [x] Native Rust + GPUI app (no webview)
+- [x] Branded dark theme (wheat gold to pumpkin gradient, warm surfaces)
+- [x] macOS-style window: unified toolbar, translucent sidebar, inset grouped lists
+- [x] Blurred window background on macOS, Mica on Windows 11
+- [x] Sidebar navigation with counts and live service status
+- [x] System tray icon that shows service status, with a popup to toggle services
 
 ### PHP Management
 - [x] Fetch available PHP versions from windows.php.net
@@ -96,11 +97,11 @@ Single language end to end, native rendering, no bundled webview, no CDN fonts.
 
 ## Project Structure
 
-Cargo workspace with two crates:
+Cargo workspace:
 
 ```
 harvest/
-├── Cargo.toml                    # workspace (default-members = harvest-app)
+├── Cargo.toml                    # workspace (default-members = harvest-gpui)
 ├── crates/
 │   ├── harvest-core/             # backend logic, no UI deps
 │   │   ├── src/
@@ -111,19 +112,28 @@ harvest/
 │   │   │   ├── node.rs           # Node.js versions + package managers
 │   │   │   ├── services.rs       # nginx/MySQL/Redis management
 │   │   │   ├── vhosts.rs         # vhost + hosts file management
+│   │   │   ├── versions.rs       # installed/available version grouping
 │   │   │   ├── types.rs          # shared data structures
 │   │   │   └── progress.rs       # transport-agnostic install progress
-│   │   └── tests/logic.rs        # unit tests for pure helpers
-│   └── harvest-app/              # native Slint binary
-│       ├── build.rs              # compiles ui/app.slint
-│       ├── assets/icons/         # bundled app/tray icon
-│       ├── ui/                   # Slint: app, theme, components + views
-│       └── src/
-│           ├── main.rs           # frameless window + backend wiring
-│           ├── window.rs         # titlebar drag/min/max/close (winit)
-│           ├── tray.rs           # system tray icon + popup
-│           ├── bridge.rs         # tokio runtime -> event loop bridge
-│           └── controllers.rs    # wires Slint Backend global to harvest-core
+│   │   └── tests/                # unit tests for pure helpers
+│   ├── harvest-gpui/             # native GPUI binary (`harvest`)
+│   │   └── src/
+│   │       ├── main.rs           # window setup, store, tray
+│   │       ├── store.rs          # app state + every action (Store entity)
+│   │       ├── bridge.rs         # tokio runtime for harvest-core calls
+│   │       ├── app.rs            # toolbar, sidebar, page switch, overlays
+│   │       ├── dashboard.rs      # pages: dashboard, sites, PHP/Node.js,
+│   │       ├── sites.rs          #   services, settings
+│   │       ├── versions.rs
+│   │       ├── services.rs
+│   │       ├── settings.rs
+│   │       ├── extensions.rs     # PHP extensions sheet
+│   │       ├── wizard.rs         # first-run setup
+│   │       ├── tray.rs           # tray icon + popup
+│   │       ├── theme.rs          # brand tokens + type scale
+│   │       ├── ui.rs             # shared building blocks
+│   │       └── assets.rs         # icons + rendered brand/tray icons
+│   └── harvest-app/              # legacy Slint UI (kept until GPUI is verified on Windows)
 └── README.md
 ```
 
@@ -131,8 +141,8 @@ harvest/
 
 ## Backend API (`harvest-core`)
 
-Plain Rust functions (no UI framework). The Slint controllers call these directly;
-installs report progress via a `ProgressSink` callback instead of a Tauri event.
+Plain Rust functions (no UI framework). The GPUI `Store` calls these on a tokio runtime;
+installs report progress via a `ProgressSink` callback.
 
 ### Config (`config.rs`)
 ```rust
@@ -202,7 +212,7 @@ check_nginx_config() -> Result<String, String>
 ## Development
 
 ```bash
-# Run the app (default workspace member is harvest-app)
+# Run the app (default workspace member is harvest-gpui, binary `harvest`)
 cargo run
 
 # Build the whole workspace
@@ -215,8 +225,8 @@ cargo build --release
 cargo build -p harvest-core
 ```
 
-The Slint VS Code extension gives a live preview of the `.slint` files in
-`crates/harvest-app/ui/`.
+GPUI needs the latest stable Rust. On macOS it renders with Metal (install Xcode); on Windows
+install Visual Studio Build Tools with "Desktop development with C++".
 
 ## Testing
 
@@ -226,28 +236,33 @@ The Slint VS Code extension gives a live preview of the `.slint` files in
 cargo test -p harvest-core
 ```
 
-Tests live in `crates/harvest-core/tests/logic.rs`. No system libraries are
-required to build/test `harvest-core`; the Slint UI builds natively on Windows.
+```bash
+# UI crate tests (brand and tray icon rendering)
+cargo test -p harvest-gpui
+```
+
+Backend tests live in `crates/harvest-core/tests/`. No system libraries are
+required to build/test `harvest-core`.
 
 ---
 
 ## Design Theme
 
-```css
-:root {
-  --color-bg: #0d0d0f;
-  --color-bg-elevated: #18181b;
-  --color-bg-card: #1c1c1f;
-  --color-border: #27272a;
-  --color-text: #fafafa;
-  --color-text-muted: #a1a1aa;
-  --color-accent: #f59e0b;        /* Amber/Harvest */
-  --color-success: #22c55e;
-  --color-danger: #ef4444;
-}
-```
+Harvest's own brand on a macOS-style layout. Tokens live in `crates/harvest-gpui/src/theme.rs`.
 
-**Fonts:** Outfit (headings/UI), JetBrains Mono (code)
+| Token | Value | Use |
+| --- | --- | --- |
+| Brand gradient | `#f5b83d` to `#ef6f2e` | logo, selection, primary buttons, progress |
+| Content | `#15120f` | page background (with a faint warm glow at the top) |
+| Card | `#1e1a16` | inset grouped lists, tiles |
+| Sidebar | `#0f0d0b` | over the window blur (macOS) or Mica (Windows) |
+| Text | `#f6efe6` | cream; secondary 58%, tertiary 34% |
+| Leaf | `#7bcf6b` | running, success |
+| Violet / Teal / Sky | `#9d8cff` / `#3cc9b8` / `#5b9dff` | PHP / services / info |
+| Rose | `#f2667a` | errors |
+
+**Type:** system font (SF Pro on macOS, Segoe UI on Windows) at SF sizes: 13 body, 11 caption,
+15 title, 20 hero title.
 
 ---
 
@@ -287,10 +302,10 @@ required to build/test `harvest-core`; the Slint UI builds natively on Windows.
 - [x] Completely standalone - no external dependencies
 
 ### Phase 5 - Dashboard & Polish
-- [ ] Quick stats overview (sites count, services status)
-- [ ] Services compact status cards with toggle
-- [ ] Recent sites quick access
-- [ ] System tray integration
+- [x] Quick stats overview (sites count, services status)
+- [x] Services compact status cards with toggle
+- [x] Recent sites quick access
+- [x] System tray integration (status icon, service toggles)
 - [ ] Auto-updates
 - [ ] Backup/restore settings
 

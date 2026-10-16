@@ -5,13 +5,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Harvest is a fully native desktop application for managing local PHP/OctoberCMS development
-environments on Windows, similar to Laravel Herd. It is written in Rust with a Slint UI (native
-rendering, no webview). It was migrated from an earlier Tauri 2.0 + Vue 3 stack.
+environments on Windows, similar to Laravel Herd. It is written in Rust with a GPUI UI (via
+gpui-kit; native GPU rendering, no webview). It was migrated from Tauri 2.0 + Vue 3, then from
+Slint (see `docs/gpui-migration.md`).
 
 ## Development Commands
 
 ```bash
-# Run the app (workspace default member is harvest-app)
+# Run the app (workspace default member is harvest-gpui, binary `harvest`)
 cargo run
 
 # Build the whole workspace
@@ -23,54 +24,88 @@ cargo build --release
 # Backend only (fast; no system libraries needed)
 cargo build -p harvest-core
 cargo test  -p harvest-core
+
+# UI crate tests (icon rendering)
+cargo test -p harvest-gpui
 ```
 
-Use the Slint VS Code extension for a live preview of `crates/harvest-app/ui/*.slint`.
+GPUI needs the latest stable Rust. On macOS it renders with Metal (needs Xcode); on Windows it
+needs the MSVC toolchain (Visual Studio Build Tools, "Desktop development with C++").
 
 ## Architecture
 
-Cargo workspace with two crates:
+Cargo workspace:
 
-### `crates/harvest-core` — backend (no UI dependencies)
-- `config.rs` — app config (JSON in the OS config dir) + Windows PATH management (winreg).
-- `sites.rs` — scan project directories, detect framework/stack/PHP version, open actions.
-- `php.rs` / `node.rs` — installed + available versions (cached 24h), install/uninstall, extensions
+### `crates/harvest-core` (backend, no UI dependencies)
+- `config.rs`: app config (JSON in the OS config dir) + Windows PATH management (winreg).
+- `sites.rs`: scan project directories, detect framework/stack/PHP version, open actions.
+- `php.rs` / `node.rs`: installed + available versions (cached 24h), install/uninstall, extensions
   (PHP) / package managers (Node).
-- `services.rs` — nginx/MySQL/Redis detection, start/stop/restart, install/uninstall.
-- `vhosts.rs` — nginx vhost + hosts file management for `.test` domains.
-- `types.rs` — shared serde structs.
-- `progress.rs` — `Progress` / `ProgressSink` (a transport-agnostic callback) used to report
-  install progress. The UI decides how to surface it.
-- Pure helpers are unit-tested in `tests/logic.rs`.
+- `services.rs`: nginx/MySQL/Redis detection, start/stop/restart, install/uninstall.
+- `vhosts.rs`: nginx vhost + hosts file management for `.test` domains.
+- `versions.rs`: grouping installed/available versions into rows.
+- `types.rs`: shared serde structs.
+- `progress.rs`: `Progress` / `ProgressSink` (a transport-agnostic callback) for install progress.
+- Pure helpers are unit-tested in `tests/`.
 
-### `crates/harvest-app` — native Slint binary
-- `ui/` — Slint markup: `theme.slint` (design tokens), `components.slint`, `app.slint` (frameless
-  window + sidebar + view switch), per-screen views (`dashboard`, `sites`, `services`, `versions`,
-  `settings`), `ext.slint` (PHP extensions modal), `wizard.slint` (first-run), `tray.slint`,
-  `globals.slint` (the `Backend` global: data models + action callbacks).
-- `src/main.rs` — selects the winit backend with `decorations(false)` for a frameless window,
-  creates the main window + tray popup, wires everything.
-- `src/window.rs` — titlebar drag + min/max/close via `slint::winit_030::WinitWindowAccessor`.
-- `src/tray.rs` — `tray-icon` creation + popup show/position/hide-on-blur.
-- `src/bridge.rs` — runs blocking/async work on a tokio runtime, marshals results back to the Slint
-  event loop with `slint::invoke_from_event_loop`.
-- `src/controllers.rs` — fills the Slint `Backend` models from `harvest-core` and implements every
-  callback. Owns the `VecModel`s (thread-local, UI thread).
+### `crates/harvest-gpui` (native GPUI binary `harvest`)
+- `main.rs`: opens the main window (blurred on macOS, Mica on Windows; traffic lights centered in
+  the 52pt toolbar), the shared `Store`, and the tray.
+- `store.rs`: the `Store` entity. Owns all data loaded from harvest-core and implements every
+  action (sites, services, PHP/Node versions, extensions, settings, first run). Emits
+  `StoreEvent::{Info, Error}`; polls service status every 5s.
+- `bridge.rs`: shared tokio runtime. `bridge::spawn(fut)` starts core work off the UI thread and
+  returns a future that GPUI tasks await.
+- `app.rs`: main window shell. Unified toolbar (drawn into gpui-component's `TitleBar`), sidebar,
+  page switch, overlays (extensions sheet, first-run wizard), notifications.
+- Pages: `dashboard.rs`, `sites.rs`, `versions.rs` (PHP and Node.js), `services.rs`,
+  `settings.rs`, plus `extensions.rs` (sheet) and `wizard.rs` (first run).
+- `tray.rs`: `tray-icon` icon + popup window. Icon and tooltip follow service status.
+- `theme.rs`: brand tokens, type scale (`Type` trait), gpui-component theme overrides.
+- `ui.rs`: shared building blocks (page body, sections, inset grouped lists, chips, capsules,
+  brand mark, toolbar type, folder picker).
+- `assets.rs`: icon asset source (default gpui-kit icons + the extra Lucide icons we use) and
+  rasterized brand/tray icons (resvg).
+
+### `crates/harvest-app` (legacy)
+The previous Slint UI, kept until the GPUI app is verified on Windows. Not a default member, so
+`cargo run` / `cargo build` skip it; build it with `-p harvest-app`.
 
 ## UI <-> backend pattern
 
-The Slint `Backend` global (in `ui/globals.slint`) declares data properties (models of `SiteItem`,
-`ServiceItem`, `VersionItem`, `PmItem`, `ExtItem`) and action callbacks. `controllers::setup`
-attaches `Rc<VecModel<…>>` to those properties and wires each callback to a `harvest-core` function.
-Long/blocking calls go through `bridge::run(fut, on_done)`; `on_done` runs on the UI thread and
-updates the models. Installs pass a `ProgressSink` that updates the relevant row's progress.
+Every view holds an `Entity<Store>` and `cx.observe`s it, so a store `cx.notify()` re-renders the
+views. Actions are `Store` methods called through `store.update(cx, ...)`. Blocking or async core
+calls go through `bridge::spawn(...)`; the store awaits them in `cx.spawn` and writes results back
+with `this.update(cx, ...)`. Install progress arrives through a `ProgressSink` that forwards to a
+futures channel drained on the UI thread. User-facing results are `StoreEvent`s, which `HarvestApp`
+turns into notifications.
+
+Each page also has `fn toolbar(this: &Entity<Self>, cx: &App) -> ui::Toolbar` (title, subtitle,
+actions) that `app.rs` renders into the window toolbar.
+
+## GPUI gotchas
+
+- gpui-kit pins its GPUI snapshot (`gpui-pre`); depend on `gpui-kit` only, never on `gpui`.
+- The theme's `font_size` is the window rem size: 13px here, so rem-based spacing and component
+  heights are macOS sized. Use the `Type` trait (`.body()`, `.caption()`, ...) for text sizes.
+- gpui-component's root paints the theme background; `ui::clear_root_background` removes it so
+  the window blur shows through the sidebar and the tray popup's rounded corners.
+- Toolbar controls sit inside an `.occlude()` element. Without it, clicks start a window drag on
+  macOS and are reported to Windows as caption area.
+- Gradients between a translucent and an opaque stop render with a bright band; use
+  `theme::mix` for solid stops.
+- Icons: add new Lucide names to `ExtraIcons` in `assets.rs`, or they render empty.
 
 ## Design System
 
-- **Background**: `#0d0d0f` (primary), `#18181b` (elevated), `#1c1c1f` (card)
-- **Accent**: `#f59e0b` (amber), hover `#d97706`; success `#22c55e`, danger `#ef4444`
-- **Fonts**: Outfit (UI), JetBrains Mono (code)
-- **Frameless window** with a custom titlebar; tokens live in `ui/theme.slint`.
+- **Brand gradient**: wheat gold `#f5b83d` to pumpkin `#ef6f2e` (logo, selection, primary buttons).
+- **Surfaces**: warm darks, content `#15120f`, cards `#1e1a16`, sidebar `#0f0d0b` over the window
+  blur, sheets `#231e19`. Text is cream `#f6efe6` (secondary 58%, tertiary 34%).
+- **Category colors**: leaf `#7bcf6b` (running/success), violet `#9d8cff` (PHP), teal `#3cc9b8`
+  (services), sky `#5b9dff`, rose `#f2667a` (errors), stone `#a39a90`.
+- **Type**: system font (SF Pro / Segoe UI), SF sizes (13 body, 11 caption, 15 title3, 20 title2).
+- **Layout**: macOS style. Unified 52pt toolbar, sidebar, inset grouped lists with inset
+  separators, section titles above groups and footnotes below.
 
 ## Site Detection (`harvest-core/src/sites.rs`)
 
@@ -83,4 +118,4 @@ Scans project directories and detects:
 ## Backend API
 
 See `README.md` for the full function list per `harvest-core` module, plus the feature checklist
-and roadmap. `docs/slint-migration.md` describes the migration from Tauri + Vue.
+and roadmap.
