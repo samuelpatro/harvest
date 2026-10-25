@@ -2,6 +2,10 @@
 
 A fully native desktop application for managing local PHP/Node.js development environments on Windows. Built in Rust with a GPUI UI (no webview).
 
+![Harvest dashboard](docs/screenshots/dashboard.png)
+
+![PHP versions](docs/screenshots/php.png)
+
 ## Tech Stack
 
 - **UI:** GPUI (Zed's GPU-accelerated UI framework) via [gpui-kit](https://gpui-kit.com), which pins a GPUI snapshot and bundles gpui-component
